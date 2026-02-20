@@ -1,0 +1,107 @@
+:root {
+  --bg-1: #0b1327;
+  --bg-2: #192f57;
+  --panel: rgba(8, 12, 24, 0.65);
+  --line: #2cd6ff;
+  --accent: #ffda4a;
+  --danger: #ff5a89;
+  --text: #ebf1ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--text);
+  font-family: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(44, 214, 255, 0.2), transparent 30%),
+    radial-gradient(circle at 90% 85%, rgba(255, 90, 137, 0.2), transparent 30%),
+    linear-gradient(140deg, var(--bg-1), var(--bg-2));
+}
+
+.app {
+  width: min(920px, 96vw);
+  padding: 20px;
+  border: 1px solid rgba(44, 214, 255, 0.5);
+  border-radius: 18px;
+  background: var(--panel);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 18px 50px rgba(5, 8, 18, 0.45);
+}
+
+.hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.2rem, 1.7vw, 2rem);
+  letter-spacing: 0.02em;
+}
+
+.stats {
+  text-align: right;
+}
+
+.stats p {
+  margin: 2px 0;
+}
+
+.game-wrap {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(44, 214, 255, 0.45);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+canvas {
+  width: min(100%, 760px);
+  height: auto;
+  display: block;
+  background: #0a0f1e;
+}
+
+.controls {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+button {
+  border: 1px solid var(--line);
+  background: linear-gradient(120deg, #11234a, #16356f);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.1);
+}
+
+@media (max-width: 720px) {
+  .hud,
+  .controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stats {
+    text-align: left;
+  }
+}

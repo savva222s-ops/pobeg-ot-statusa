@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Побег от статуса</title>
+    <style>
+      :root {
+        --bg-1: #0b1327;
+        --bg-2: #192f57;
+        --panel: rgba(8, 12, 24, 0.65);
+        --line: #2cd6ff;
+        --text: #ebf1ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        color: var(--text);
+        font-family: "Trebuchet MS", "Avenir Next", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 15% 15%, rgba(44, 214, 255, 0.2), transparent 30%),
+          radial-gradient(circle at 90% 85%, rgba(255, 90, 137, 0.2), transparent 30%),
+          linear-gradient(140deg, var(--bg-1), var(--bg-2));
+        overscroll-behavior: none;
+      }
+      .app {
+        width: min(920px, 96vw);
+        padding: 20px;
+        border: 1px solid rgba(44, 214, 255, 0.5);
+        border-radius: 18px;
+        background: var(--panel);
+        backdrop-filter: blur(4px);
+        box-shadow: 0 18px 50px rgba(5, 8, 18, 0.45);
+      }
+      .hud {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(1.2rem, 1.7vw, 2rem);
+        letter-spacing: 0.02em;
+      }
+      .stats { text-align: right; }
+      .stats p { margin: 2px 0; }
+      .game-wrap {
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(44, 214, 255, 0.45);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      canvas {
+        width: min(100%, 760px);
+        height: auto;
+        display: block;
+        background: #0a0f1e;
+        touch-action: none;
+      }
+      .controls {
+        margin-top: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+      button {
+        border: 1px solid var(--line);
+        background: linear-gradient(120deg, #11234a, #16356f);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      .mobile-controls {
+        display: none;
+        margin-top: 12px;
+        width: 100%;
+        justify-items: center;
+        gap: 8px;
+        user-select: none;
+      }
+      .mobile-row { display: flex; gap: 8px; }
+      .dir-btn {
+        width: 62px;
+        height: 62px;
+        font-size: 1.4rem;
+        line-height: 1;
+        border-radius: 12px;
+        border: 1px solid rgba(44, 214, 255, 0.8);
+        background: linear-gradient(145deg, rgba(17, 35, 74, 0.95), rgba(22, 53, 111, 0.95));
+        color: #ebf1ff;
+        touch-action: manipulation;
+      }
+      .dir-btn.active { transform: scale(0.98); filter: brightness(1.15); }
+      @media (max-width: 720px) {
+        .hud, .controls { flex-direction: column; align-items: flex-start; }
+        .stats { text-align: left; }
+        .mobile-controls { display: grid; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="hud">
+        <h1>Побег от статуса</h1>
+        <div class="stats">
+          <p id="coffeeLeft">Стаканчиков кофе осталось: 0</p>
+          <p id="statusText">Статус: В игре</p>
+        </div>
+      </header>
+
+      <section class="game-wrap">
+        <canvas id="game" width="760" height="520" aria-label="Игра Побег от статуса"></canvas>
+      </section>
+
+      <footer class="controls">
+        <p>Управление: WASD/стрелки или кнопки снизу на телефоне</p>
+        <button id="restartBtn" type="button">Начать заново</button>
+      </footer>
+
+      <section class="mobile-controls" aria-label="Мобильное управление">
+        <button class="dir-btn" data-dir="up" type="button" aria-label="Вверх">▲</button>
+        <div class="mobile-row">
+          <button class="dir-btn" data-dir="left" type="button" aria-label="Влево">◀</button>
+          <button class="dir-btn" data-dir="down" type="button" aria-label="Вниз">▼</button>
+          <button class="dir-btn" data-dir="right" type="button" aria-label="Вправо">▶</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        var TILE = 40;
+        var MAP = [
+          "###################",
+          "#P....#.....#....E#",
+          "#.##.#.###.#.##.#.#",
+          "#....#.....#....#.#",
+          "#.####.###.####.#.#",
+          "#......#.#......#.#",
+          "#.####.#.#.####.#.#",
+          "#...#......#...#..#",
+          "###.#.####.#.#.####",
+          "#...#....#...#....#",
+          "#.#.####.#.####.#.#",
+          "#.#......#......#.#",
+          "#.######.#.######.#",
+          "#E.................#",
+          "###################"
+        ];
+
+        var canvas = document.getElementById("game");
+        var ctx = canvas.getContext("2d");
+        var coffeeLeftEl = document.getElementById("coffeeLeft");
+        var statusTextEl = document.getElementById("statusText");
+        var restartBtn = document.getElementById("restartBtn");
+        var dirButtons = document.querySelectorAll(".dir-btn");
+
+        var WIDTH = MAP[0].length;
+        var HEIGHT = MAP.length;
+        canvas.width = WIDTH * TILE;
+        canvas.height = HEIGHT * TILE;
+
+        var DIRECTIONS = [
+          { x: 1, y: 0 },
+          { x: -1, y: 0 },
+          { x: 0, y: 1 },
+          { x: 0, y: -1 }
+        ];
+
+        var svgParts = [
+          "<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'>",
+          "<defs><linearGradient id='cup' x1='0' y1='0' x2='0' y2='1'>",
+          "<stop offset='0%' stop-color='#f8f4ec'/><stop offset='100%' stop-color='#e7ddcf'/></linearGradient>",
+          "<linearGradient id='lid' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#f6f2ea'/><stop offset='100%' stop-color='#d5ccbf'/></linearGradient></defs>",
+          "<ellipse cx='32' cy='56' rx='17' ry='5' fill='rgba(0,0,0,0.17)'/>",
+          "<rect x='19' y='13' width='26' height='9' rx='3' fill='url(#lid)'/>",
+          "<path d='M22 20 L42 20 L39 50 Q32 53 25 50 Z' fill='url(#cup)' stroke='#fff' stroke-width='1.2'/>",
+          "<rect x='24' y='28' width='16' height='12' rx='2' fill='#2fa56f'/>",
+          "<circle cx='32' cy='34' r='4.5' fill='#f7f7f7' opacity='0.85'/><circle cx='32' cy='34' r='2.3' fill='#2fa56f'/>",
+          "</svg>"
+        ];
+        var cupImage = new Image();
+        var cupLoaded = false;
+        cupImage.onload = function () { cupLoaded = true; };
+        cupImage.src = "data:image/svg+xml;utf8," + encodeURIComponent(svgParts.join(""));
+
+        var state = null;
+
+        function showFatal(msg) {
+          statusTextEl.textContent = "Ошибка: " + msg;
+          statusTextEl.style.color = "#ff8ab0";
+          ctx.fillStyle = "#0a0f1e";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ff8ab0";
+          ctx.font = "20px sans-serif";
+          ctx.fillText("Ошибка запуска игры", 20, 40);
+          ctx.fillStyle = "#eaf1ff";
+          ctx.font = "16px sans-serif";
+          ctx.fillText("Открой файл в Safari/Chrome", 20, 68);
+        }
+
+        function initState() {
+          var cups = {};
+          var enemies = [];
+          var player = { x: 1, y: 1, dirX: 0, dirY: 0, nextDirX: 0, nextDirY: 0 };
+          var y, x, cell;
+
+          for (y = 0; y < HEIGHT; y += 1) {
+            for (x = 0; x < WIDTH; x += 1) {
+              cell = MAP[y].charAt(x);
+              if (cell === ".") cups[x + "," + y] = true;
+              if (cell === "P") { player.x = x; player.y = y; }
+              if (cell === "E") enemies.push({ x: x, y: y, dirX: 0, dirY: 0 });
+            }
+          }
+
+          state = {
+            player: player,
+            enemies: enemies,
+            cups: cups,
+            cupsCount: Object.keys(cups).length,
+            gameOver: false,
+            won: false,
+            tick: 0,
+            playerStepDelay: 8,
+            enemyStepDelay: 12,
+            pulse: 0
+          };
+
+          updateHud();
+        }
+
+        function cupsLeft() {
+          return Object.keys(state.cups).length;
+        }
+
+        function isWall(x, y) {
+          if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) return true;
+          return MAP[y].charAt(x) === "#";
+        }
+
+        function setDirection(dx, dy) {
+          if (!state || state.gameOver) return;
+          state.player.nextDirX = dx;
+          state.player.nextDirY = dy;
+        }
+
+        function tryMove(entity, dx, dy) {
+          var nx = entity.x + dx;
+          var ny = entity.y + dy;
+          if (isWall(nx, ny)) return false;
+          entity.x = nx;
+          entity.y = ny;
+          return true;
+        }
+
+        function updatePlayer() {
+          var p = state.player;
+          var key;
+
+          if (state.tick % state.playerStepDelay !== 0) return;
+
+          if (!isWall(p.x + p.nextDirX, p.y + p.nextDirY)) {
+            p.dirX = p.nextDirX;
+            p.dirY = p.nextDirY;
+          }
+          if (p.dirX !== 0 || p.dirY !== 0) tryMove(p, p.dirX, p.dirY);
+
+          key = p.x + "," + p.y;
+          if (state.cups[key]) {
+            delete state.cups[key];
+            if (cupsLeft() === 0) {
+              state.won = true;
+              state.gameOver = true;
+            }
+          }
+        }
+
+        function nextEnemyStep(enemy) {
+          var player = state.player;
+          var possible = [];
+          var i, dir, nx, ny, source, rnd;
+
+          for (i = 0; i < DIRECTIONS.length; i += 1) {
+            dir = DIRECTIONS[i];
+            nx = enemy.x + dir.x;
+            ny = enemy.y + dir.y;
+            if (!isWall(nx, ny)) {
+              possible.push({
+                x: dir.x,
+                y: dir.y,
+                score: Math.abs(nx - player.x) + Math.abs(ny - player.y)
+              });
+            }
+          }
+
+          if (!possible.length) return { x: 0, y: 0 };
+
+          if (Math.random() < 0.72) {
+            possible.sort(function (a, b) { return a.score - b.score; });
+            return { x: possible[0].x, y: possible[0].y };
+          }
+
+          source = possible.filter(function (o) {
+            return !(o.x === -enemy.dirX && o.y === -enemy.dirY);
+          });
+          if (!source.length) source = possible;
+          rnd = source[Math.floor(Math.random() * source.length)];
+          return { x: rnd.x, y: rnd.y };
+        }
+
+        function updateEnemies() {
+          var i, enemy, next;
+          if (state.tick % state.enemyStepDelay !== 0) return;
+
+          for (i = 0; i < state.enemies.length; i += 1) {
+            enemy = state.enemies[i];
+            next = nextEnemyStep(enemy);
+            enemy.dirX = next.x;
+            enemy.dirY = next.y;
+            tryMove(enemy, enemy.dirX, enemy.dirY);
+
+            if (enemy.x === state.player.x && enemy.y === state.player.y) {
+              state.gameOver = true;
+              state.won = false;
+            }
+          }
+        }
+
+        function updateHud() {
+          coffeeLeftEl.textContent = "Стаканчиков кофе осталось: " + (state ? cupsLeft() : 0);
+          if (!state || !state.gameOver) {
+            statusTextEl.textContent = "Статус: В игре";
+            statusTextEl.style.color = "#ebf1ff";
+            return;
+          }
+          if (state.won) {
+            statusTextEl.textContent = "Статус: Победа. Все стаканчики собраны";
+            statusTextEl.style.color = "#7effb1";
+          } else {
+            statusTextEl.textContent = "Статус: Пойман листом статуса";
+            statusTextEl.style.color = "#ff8ab0";
+          }
+        }
+
+        function drawWall(x, y) {
+          var px = x * TILE;
+          var py = y * TILE;
+          ctx.fillStyle = "#112045";
+          ctx.fillRect(px, py, TILE, TILE);
+          ctx.strokeStyle = "#2cd6ff";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+        }
+
+        function drawCup(x, y) {
+          var px = x * TILE;
+          var py = y * TILE;
+          var bob = Math.sin(state.pulse + x * 0.35 + y * 0.22) * 2;
+          var drawX = px + 8;
+          var drawY = py + 6 + bob;
+
+          ctx.fillStyle = "rgba(47, 165, 111, 0.22)";
+          if (typeof ctx.ellipse === "function") {
+            ctx.beginPath();
+            ctx.ellipse(px + TILE / 2, py + TILE - 6, 10, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillRect(px + 10, py + TILE - 9, 20, 6);
+          }
+
+          if (cupLoaded) {
+            ctx.drawImage(cupImage, drawX, drawY, 24, 28);
+          } else {
+            ctx.fillStyle = "#f5efe4";
+            ctx.fillRect(drawX + 3, drawY + 4, 18, 22);
+            ctx.fillStyle = "#2fa56f";
+            ctx.fillRect(drawX + 6, drawY + 12, 12, 8);
+          }
+        }
+
+        function drawPlayer() {
+          var p = state.player;
+          var px = p.x * TILE;
+          var py = p.y * TILE;
+          var dirX = p.nextDirX || p.dirX;
+          var dirY = p.nextDirY || p.dirY;
+
+          ctx.fillStyle = "rgba(32, 230, 255, 0.2)";
+          ctx.beginPath();
+          ctx.arc(px + TILE / 2, py + TILE / 2 + 11, 14, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#f4d0b4";
+          ctx.beginPath();
+          ctx.arc(px + TILE / 2, py + 10, 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#2c2f3f";
+          ctx.fillRect(px + 12, py + 16, 16, 14);
+          ctx.fillStyle = "#1a233b";
+          ctx.fillRect(px + 12, py + 18, 16, 16);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(px + 15, py + 20, 10, 10);
+
+          ctx.fillStyle = "#ff5a89";
+          ctx.beginPath();
+          ctx.moveTo(px + 20, py + 21);
+          ctx.lineTo(px + 17, py + 28);
+          ctx.lineTo(px + 20, py + 34);
+          ctx.lineTo(px + 23, py + 28);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = "#1f2f57";
+          ctx.fillRect(px + 9, py + 19, 3, 12);
+          ctx.fillRect(px + 28, py + 19, 3, 12);
+
+          if (dirX !== 0 || dirY !== 0) {
+            ctx.fillStyle = "#f4d0b4";
+            ctx.beginPath();
+            ctx.arc(px + 20 + dirX * 10, py + 24 + dirY * 6, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.fillStyle = "#3f2f24";
+          if (dirX >= 0) ctx.fillRect(px + 27, py + 24, 7, 9);
+          else ctx.fillRect(px + 6, py + 24, 7, 9);
+
+          ctx.fillStyle = "#141824";
+          ctx.fillRect(px + 14, py + 34, 5, 6);
+          ctx.fillRect(px + 21, py + 34, 5, 6);
+        }
+
+        function drawEnemy(enemy) {
+          var px = enemy.x * TILE;
+          var py = enemy.y * TILE;
+          var i;
+          ctx.fillStyle = "#fffefb";
+          ctx.fillRect(px + 7, py + 5, TILE - 14, TILE - 10);
+          ctx.strokeStyle = "#ff5a89";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(px + 7, py + 5, TILE - 14, TILE - 10);
+          ctx.fillStyle = "#ff5a89";
+          for (i = 0; i < 3; i += 1) ctx.fillRect(px + 11, py + 12 + i * 8, TILE - 22, 3);
+        }
+
+        function drawOverlay() {
+          var title, subtitle;
+          if (!state.gameOver) return;
+          ctx.fillStyle = "rgba(7, 10, 20, 0.7)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = state.won ? "#7effb1" : "#ff7fa8";
+          ctx.font = "bold 54px Avenir Next, Trebuchet MS, sans-serif";
+          title = state.won ? "ПОБЕДА" : "ПОРАЖЕНИЕ";
+          ctx.fillText(title, canvas.width / 2 - ctx.measureText(title).width / 2, canvas.height / 2 - 20);
+          ctx.fillStyle = "#eaf1ff";
+          ctx.font = "24px Avenir Next, Trebuchet MS, sans-serif";
+          subtitle = state.won ? "Ты собрал все стаканчики кофе" : "Статус тебя догнал";
+          ctx.fillText(subtitle, canvas.width / 2 - ctx.measureText(subtitle).width / 2, canvas.height / 2 + 24);
+        }
+
+        function render() {
+          var x, y, keys, i, parts;
+          ctx.fillStyle = "#0a0f1e";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          for (y = 0; y < HEIGHT; y += 1) {
+            for (x = 0; x < WIDTH; x += 1) {
+              if (MAP[y].charAt(x) === "#") drawWall(x, y);
+            }
+          }
+
+          keys = Object.keys(state.cups);
+          for (i = 0; i < keys.length; i += 1) {
+            parts = keys[i].split(",");
+            drawCup(parseInt(parts[0], 10), parseInt(parts[1], 10));
+          }
+
+          for (i = 0; i < state.enemies.length; i += 1) drawEnemy(state.enemies[i]);
+          drawPlayer();
+          drawOverlay();
+        }
+
+        function loop() {
+          state.tick += 1;
+          state.pulse += 0.08;
+          if (!state.gameOver) {
+            updatePlayer();
+            updateEnemies();
+            updateHud();
+          }
+          render();
+          window.requestAnimationFrame(loop);
+        }
+
+        function applyDirByName(name) {
+          if (name === "up") setDirection(0, -1);
+          if (name === "down") setDirection(0, 1);
+          if (name === "left") setDirection(-1, 0);
+          if (name === "right") setDirection(1, 0);
+        }
+
+        function bindDirButton(btn) {
+          var dir = btn.getAttribute("data-dir");
+          var press = function (e) {
+            if (e && e.preventDefault) e.preventDefault();
+            btn.classList.add("active");
+            applyDirByName(dir);
+          };
+          var release = function () {
+            btn.classList.remove("active");
+          };
+
+          btn.addEventListener("touchstart", press, false);
+          btn.addEventListener("touchend", release, false);
+          btn.addEventListener("touchcancel", release, false);
+          btn.addEventListener("mousedown", press, false);
+          btn.addEventListener("mouseup", release, false);
+          btn.addEventListener("mouseleave", release, false);
+        }
+
+        window.addEventListener("keydown", function (event) {
+          var key = (event.key || "").toLowerCase();
+          if (key === "arrowup" || key === "w") setDirection(0, -1);
+          if (key === "arrowdown" || key === "s") setDirection(0, 1);
+          if (key === "arrowleft" || key === "a") setDirection(-1, 0);
+          if (key === "arrowright" || key === "d") setDirection(1, 0);
+        });
+
+        restartBtn.addEventListener("click", function () { initState(); }, false);
+
+        try {
+          var i;
+          for (i = 0; i < dirButtons.length; i += 1) bindDirButton(dirButtons[i]);
+          initState();
+          window.requestAnimationFrame(loop);
+        } catch (err) {
+          showFatal(err && err.message ? err.message : "unknown");
+        }
+      })();
+    </script>
+  </body>
+</html>
