@@ -70,6 +70,46 @@
         align-items: center;
         gap: 16px;
       }
+      .leaderboard {
+        margin-top: 14px;
+        padding: 12px;
+        border: 1px solid rgba(44, 214, 255, 0.4);
+        border-radius: 12px;
+        background: rgba(7, 13, 27, 0.45);
+      }
+      .leaderboard h2 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+      }
+      .leaderboard ol {
+        margin: 0;
+        padding-left: 20px;
+      }
+      .leaderboard li {
+        margin: 3px 0;
+      }
+      .leaderboard-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .leaderboard input {
+        background: #0d1933;
+        border: 1px solid rgba(44, 214, 255, 0.55);
+        border-radius: 8px;
+        color: #ebf1ff;
+        padding: 8px 10px;
+        width: 170px;
+      }
+      .small-btn {
+        padding: 8px 10px;
+      }
+      .hint {
+        margin: 8px 0 0;
+        font-size: 0.86rem;
+        color: #b8cbe7;
+      }
       button {
         border: 1px solid var(--line);
         background: linear-gradient(120deg, #11234a, #16356f);
@@ -125,6 +165,15 @@
         <p>Управление: WASD/стрелки или кнопки снизу на телефоне</p>
         <button id="restartBtn" type="button">Начать заново</button>
       </footer>
+      <section class="leaderboard">
+        <h2>Топ-10: Побег от статуса</h2>
+        <div class="leaderboard-controls">
+          <input id="playerNameInput" type="text" maxlength="20" placeholder="Твое имя (2-20)" />
+          <button id="sendScoreBtn" class="small-btn" type="button">Отправить результат</button>
+        </div>
+        <ol id="leaderboardList"></ol>
+        <p id="leaderboardHint" class="hint">Сыграй и отправь результат в таблицу.</p>
+      </section>
 
       <section class="mobile-controls" aria-label="Мобильное управление">
         <button class="dir-btn" data-dir="up" type="button" aria-label="Вверх">▲</button>
@@ -162,7 +211,12 @@
         var coffeeLeftEl = document.getElementById("coffeeLeft");
         var statusTextEl = document.getElementById("statusText");
         var restartBtn = document.getElementById("restartBtn");
+        var playerNameInput = document.getElementById("playerNameInput");
+        var sendScoreBtn = document.getElementById("sendScoreBtn");
+        var leaderboardList = document.getElementById("leaderboardList");
+        var leaderboardHint = document.getElementById("leaderboardHint");
         var dirButtons = document.querySelectorAll(".dir-btn");
+        var API_BASE = "https://d5do84mn631if2vsbgrq.z7jmlavt.apigw.yandexcloud.net";
 
         var WIDTH = MAP[0].length;
         var HEIGHT = MAP.length;
@@ -194,6 +248,72 @@
         cupImage.src = "data:image/svg+xml;utf8," + encodeURIComponent(svgParts.join(""));
 
         var state = null;
+
+        function getCurrentScore() {
+          if (!state) return 0;
+          return state.cupsCount - cupsLeft();
+        }
+
+        function setHint(text, isError) {
+          leaderboardHint.textContent = text;
+          leaderboardHint.style.color = isError ? "#ff9cb8" : "#b8cbe7";
+        }
+
+        function renderLeaderboard(items) {
+          var i, li;
+          leaderboardList.innerHTML = "";
+          if (!items || !items.length) {
+            li = document.createElement("li");
+            li.textContent = "Пока пусто";
+            leaderboardList.appendChild(li);
+            return;
+          }
+          for (i = 0; i < items.length; i += 1) {
+            li = document.createElement("li");
+            li.textContent = (i + 1) + ". " + items[i].name + " — " + items[i].score;
+            leaderboardList.appendChild(li);
+          }
+        }
+
+        function fetchLeaderboard() {
+          return fetch(API_BASE + "/leaderboard")
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              renderLeaderboard(data.items || []);
+            })
+            .catch(function () {
+              setHint("Не удалось загрузить топ-10", true);
+            });
+        }
+
+        function submitScore(autoMode) {
+          var name = (playerNameInput.value || "").trim();
+          var score = getCurrentScore();
+          if (name.length < 2 || name.length > 20) {
+            if (!autoMode) setHint("Имя: от 2 до 20 символов", true);
+            return Promise.resolve();
+          }
+          if (!state || score <= 0) {
+            if (!autoMode) setHint("Сначала набери очки в игре", true);
+            return Promise.resolve();
+          }
+          if (state.sentScore) return Promise.resolve();
+
+          return fetch(API_BASE + "/score", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name, score: score })
+          })
+            .then(function (res) {
+              if (!res.ok) throw new Error("bad status");
+              state.sentScore = true;
+              setHint("Результат отправлен: " + score, false);
+              return fetchLeaderboard();
+            })
+            .catch(function () {
+              setHint("Ошибка отправки результата", true);
+            });
+        }
 
         function showFatal(msg) {
           statusTextEl.textContent = "Ошибка: " + msg;
@@ -233,7 +353,8 @@
             tick: 0,
             playerStepDelay: 8,
             enemyStepDelay: 12,
-            pulse: 0
+            pulse: 0,
+            sentScore: false
           };
 
           updateHud();
@@ -337,7 +458,7 @@
         }
 
         function updateHud() {
-          coffeeLeftEl.textContent = "Стаканчиков кофе осталось: " + (state ? cupsLeft() : 0);
+          coffeeLeftEl.textContent = "Стаканчиков осталось: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
           if (!state || !state.gameOver) {
             statusTextEl.textContent = "Статус: В игре";
             statusTextEl.style.color = "#ebf1ff";
@@ -492,12 +613,16 @@
         }
 
         function loop() {
+          var wasGameOver = state.gameOver;
           state.tick += 1;
           state.pulse += 0.08;
           if (!state.gameOver) {
             updatePlayer();
             updateEnemies();
             updateHud();
+          }
+          if (!wasGameOver && state.gameOver) {
+            submitScore(true);
           }
           render();
           window.requestAnimationFrame(loop);
@@ -538,11 +663,13 @@
         });
 
         restartBtn.addEventListener("click", function () { initState(); }, false);
+        sendScoreBtn.addEventListener("click", function () { submitScore(false); }, false);
 
         try {
           var i;
           for (i = 0; i < dirButtons.length; i += 1) bindDirButton(dirButtons[i]);
           initState();
+          fetchLeaderboard();
           window.requestAnimationFrame(loop);
         } catch (err) {
           showFatal(err && err.message ? err.message : "unknown");
