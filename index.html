@@ -217,6 +217,7 @@
         var leaderboardHint = document.getElementById("leaderboardHint");
         var dirButtons = document.querySelectorAll(".dir-btn");
         var API_BASE = "https://d5do84mn631if2vsbgrq.z7jmlavt.apigw.yandexcloud.net";
+        var NAME_KEY = "pobeg_player_name";
 
         var WIDTH = MAP[0].length;
         var HEIGHT = MAP.length;
@@ -259,6 +260,22 @@
           leaderboardHint.style.color = isError ? "#ff9cb8" : "#b8cbe7";
         }
 
+        function getPlayerName() {
+          return (playerNameInput.value || "").trim();
+        }
+
+        function savePlayerName() {
+          var name = getPlayerName();
+          if (name.length >= 2 && name.length <= 20) {
+            localStorage.setItem(NAME_KEY, name);
+          }
+        }
+
+        function loadPlayerName() {
+          var saved = localStorage.getItem(NAME_KEY) || "";
+          if (saved) playerNameInput.value = saved;
+        }
+
         function renderLeaderboard(items) {
           var i, li;
           leaderboardList.innerHTML = "";
@@ -287,12 +304,13 @@
         }
 
         function submitScore(autoMode) {
-          var name = (playerNameInput.value || "").trim();
+          var name = getPlayerName();
           var score = getCurrentScore();
           if (name.length < 2 || name.length > 20) {
             if (!autoMode) setHint("Имя: от 2 до 20 символов", true);
             return Promise.resolve();
           }
+          savePlayerName();
           if (!state || score <= 0) {
             if (!autoMode) setHint("Сначала набери очки в игре", true);
             return Promise.resolve();
@@ -305,13 +323,15 @@
             body: JSON.stringify({ name: name, score: score })
           })
             .then(function (res) {
-              if (!res.ok) throw new Error("bad status");
-              state.sentScore = true;
-              setHint("Результат отправлен: " + score, false);
-              return fetchLeaderboard();
+              return res.text().then(function (txt) {
+                if (!res.ok) throw new Error(txt || ("HTTP " + res.status));
+                state.sentScore = true;
+                setHint("Результат отправлен: " + score, false);
+                return fetchLeaderboard();
+              });
             })
-            .catch(function () {
-              setHint("Ошибка отправки результата", true);
+            .catch(function (err) {
+              setHint("Ошибка отправки: " + (err && err.message ? err.message : "unknown"), true);
             });
         }
 
@@ -621,7 +641,7 @@
             updateEnemies();
             updateHud();
           }
-          if (!wasGameOver && state.gameOver) {
+          if (!wasGameOver && state.gameOver && !state.won) {
             submitScore(true);
           }
           render();
@@ -664,10 +684,13 @@
 
         restartBtn.addEventListener("click", function () { initState(); }, false);
         sendScoreBtn.addEventListener("click", function () { submitScore(false); }, false);
+        playerNameInput.addEventListener("change", savePlayerName, false);
+        playerNameInput.addEventListener("blur", savePlayerName, false);
 
         try {
           var i;
           for (i = 0; i < dirButtons.length; i += 1) bindDirButton(dirButtons[i]);
+          loadPlayerName();
           initState();
           fetchLeaderboard();
           window.requestAnimationFrame(loop);
