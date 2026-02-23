@@ -208,7 +208,7 @@
       <section class="leaderboard">
         <h2>Топ-10: Побег от статуса</h2>
         <ol id="leaderboardList"></ol>
-        <p id="leaderboardHint" class="hint">Результат отправляется автоматически при проигрыше.</p>
+        <p id="leaderboardHint" class="hint">Результат отправляется автоматически при завершении раунда.</p>
       </section>
     </main>
 
@@ -695,7 +695,7 @@
             updateEnemies();
             updateHud();
           }
-          if (!wasGameOver && state.gameOver && !state.won) {
+          if (!wasGameOver && state.gameOver) {
             submitScore(true);
           }
           render();
