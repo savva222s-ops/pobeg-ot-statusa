@@ -728,13 +728,35 @@
           btn.addEventListener("mouseleave", release, false);
         }
 
-        window.addEventListener("keydown", function (event) {
+        function handleKeyboardDirection(event) {
           var key = (event.key || "").toLowerCase();
-          if (key === "arrowup" || key === "w") setDirection(0, -1);
-          if (key === "arrowdown" || key === "s") setDirection(0, 1);
-          if (key === "arrowleft" || key === "a") setDirection(-1, 0);
-          if (key === "arrowright" || key === "d") setDirection(1, 0);
-        });
+          var code = event.code || "";
+          var handled = false;
+
+          if (key === "arrowup" || key === "w" || code === "KeyW") {
+            setDirection(0, -1);
+            handled = true;
+          }
+          if (key === "arrowdown" || key === "s" || code === "KeyS") {
+            setDirection(0, 1);
+            handled = true;
+          }
+          if (key === "arrowleft" || key === "a" || code === "KeyA") {
+            setDirection(-1, 0);
+            handled = true;
+          }
+          if (key === "arrowright" || key === "d" || code === "KeyD") {
+            setDirection(1, 0);
+            handled = true;
+          }
+
+          if (handled && gameStarted) {
+            event.preventDefault();
+          }
+        }
+
+        window.addEventListener("keydown", handleKeyboardDirection, false);
+        document.addEventListener("keydown", handleKeyboardDirection, false);
 
         restartBtn.addEventListener("click", function () {
           if (!gameStarted) return;
