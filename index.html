@@ -337,7 +337,7 @@
           }
           for (i = 0; i < items.length; i += 1) {
             li = document.createElement("li");
-            li.textContent = (i + 1) + ". " + items[i].name + " — " + items[i].score;
+            li.textContent = items[i].name + " — " + items[i].score;
             leaderboardList.appendChild(li);
           }
         }
