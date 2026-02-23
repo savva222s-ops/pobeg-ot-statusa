@@ -110,6 +110,30 @@
         font-size: 0.86rem;
         color: #b8cbe7;
       }
+      .start-gate {
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid rgba(44, 214, 255, 0.5);
+        border-radius: 12px;
+        background: rgba(5, 10, 21, 0.75);
+      }
+      .start-gate h2 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+      }
+      .start-gate-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .start-gate input {
+        background: #0d1933;
+        border: 1px solid rgba(44, 214, 255, 0.55);
+        border-radius: 8px;
+        color: #ebf1ff;
+        padding: 8px 10px;
+        width: 220px;
+      }
       button {
         border: 1px solid var(--line);
         background: linear-gradient(120deg, #11234a, #16356f);
@@ -165,14 +189,18 @@
         <p>Управление: WASD/стрелки или кнопки снизу на телефоне</p>
         <button id="restartBtn" type="button">Начать заново</button>
       </footer>
+      <section id="startGate" class="start-gate">
+        <h2>Перед стартом введи имя</h2>
+        <div class="start-gate-controls">
+          <input id="startNameInput" type="text" maxlength="20" placeholder="Имя игрока (2-20)" />
+          <button id="startGameBtn" class="small-btn" type="button">Начать игру</button>
+        </div>
+        <p class="hint">Пока имя не введено, игра не запускается.</p>
+      </section>
       <section class="leaderboard">
         <h2>Топ-10: Побег от статуса</h2>
-        <div class="leaderboard-controls">
-          <input id="playerNameInput" type="text" maxlength="20" placeholder="Твое имя (2-20)" />
-          <button id="sendScoreBtn" class="small-btn" type="button">Отправить результат</button>
-        </div>
         <ol id="leaderboardList"></ol>
-        <p id="leaderboardHint" class="hint">Сыграй и отправь результат в таблицу.</p>
+        <p id="leaderboardHint" class="hint">Результат отправляется автоматически при проигрыше.</p>
       </section>
 
       <section class="mobile-controls" aria-label="Мобильное управление">
@@ -211,13 +239,16 @@
         var coffeeLeftEl = document.getElementById("coffeeLeft");
         var statusTextEl = document.getElementById("statusText");
         var restartBtn = document.getElementById("restartBtn");
-        var playerNameInput = document.getElementById("playerNameInput");
-        var sendScoreBtn = document.getElementById("sendScoreBtn");
+        var startGate = document.getElementById("startGate");
+        var startNameInput = document.getElementById("startNameInput");
+        var startGameBtn = document.getElementById("startGameBtn");
         var leaderboardList = document.getElementById("leaderboardList");
         var leaderboardHint = document.getElementById("leaderboardHint");
         var dirButtons = document.querySelectorAll(".dir-btn");
         var API_BASE = "https://d5do84mn631if2vsbgrq.z7jmlavt.apigw.yandexcloud.net";
         var NAME_KEY = "pobeg_player_name";
+        var currentPlayerName = "";
+        var gameStarted = false;
 
         var WIDTH = MAP[0].length;
         var HEIGHT = MAP.length;
@@ -260,12 +291,7 @@
           leaderboardHint.style.color = isError ? "#ff9cb8" : "#b8cbe7";
         }
 
-        function getPlayerName() {
-          return (playerNameInput.value || "").trim();
-        }
-
-        function savePlayerName() {
-          var name = getPlayerName();
+        function savePlayerName(name) {
           if (name.length >= 2 && name.length <= 20) {
             localStorage.setItem(NAME_KEY, name);
           }
@@ -273,7 +299,32 @@
 
         function loadPlayerName() {
           var saved = localStorage.getItem(NAME_KEY) || "";
-          if (saved) playerNameInput.value = saved;
+          if (saved) startNameInput.value = saved;
+        }
+
+        function startGameSession() {
+          var name = (startNameInput.value || "").trim();
+          if (name.length < 2 || name.length > 20) {
+            setHint("Имя: от 2 до 20 символов", true);
+            return;
+          }
+          currentPlayerName = name;
+          savePlayerName(name);
+          gameStarted = true;
+          startGate.style.display = "none";
+          setHint("Игрок: " + name, false);
+          initState();
+        }
+
+        function drawWaitingScreen() {
+          ctx.fillStyle = "#0a0f1e";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#eaf1ff";
+          ctx.font = "bold 30px Avenir Next, Trebuchet MS, sans-serif";
+          ctx.fillText("Введи имя и нажми 'Начать игру'", 120, canvas.height / 2 - 10);
+          ctx.font = "20px Avenir Next, Trebuchet MS, sans-serif";
+          ctx.fillStyle = "#87c9ff";
+          ctx.fillText("Результат отправляется автоматически при проигрыше", 130, canvas.height / 2 + 28);
         }
 
         function renderLeaderboard(items) {
@@ -304,13 +355,12 @@
         }
 
         function submitScore(autoMode) {
-          var name = getPlayerName();
+          var name = currentPlayerName;
           var score = getCurrentScore();
           if (name.length < 2 || name.length > 20) {
             if (!autoMode) setHint("Имя: от 2 до 20 символов", true);
             return Promise.resolve();
           }
-          savePlayerName();
           if (!state || score <= 0) {
             if (!autoMode) setHint("Сначала набери очки в игре", true);
             return Promise.resolve();
@@ -390,7 +440,7 @@
         }
 
         function setDirection(dx, dy) {
-          if (!state || state.gameOver) return;
+          if (!gameStarted || !state || state.gameOver) return;
           state.player.nextDirX = dx;
           state.player.nextDirY = dy;
         }
@@ -633,6 +683,11 @@
         }
 
         function loop() {
+          if (!gameStarted || !state) {
+            drawWaitingScreen();
+            window.requestAnimationFrame(loop);
+            return;
+          }
           var wasGameOver = state.gameOver;
           state.tick += 1;
           state.pulse += 0.08;
@@ -682,16 +737,21 @@
           if (key === "arrowright" || key === "d") setDirection(1, 0);
         });
 
-        restartBtn.addEventListener("click", function () { initState(); }, false);
-        sendScoreBtn.addEventListener("click", function () { submitScore(false); }, false);
-        playerNameInput.addEventListener("change", savePlayerName, false);
-        playerNameInput.addEventListener("blur", savePlayerName, false);
+        restartBtn.addEventListener("click", function () {
+          if (!gameStarted) return;
+          initState();
+        }, false);
+        startGameBtn.addEventListener("click", startGameSession, false);
+        startNameInput.addEventListener("keydown", function (event) {
+          if ((event.key || "").toLowerCase() === "enter") startGameSession();
+        }, false);
 
         try {
           var i;
           for (i = 0; i < dirButtons.length; i += 1) bindDirButton(dirButtons[i]);
           loadPlayerName();
-          initState();
+          statusTextEl.textContent = "Статус: Введи имя для старта";
+          statusTextEl.style.color = "#ffd37a";
           fetchLeaderboard();
           window.requestAnimationFrame(loop);
         } catch (err) {
