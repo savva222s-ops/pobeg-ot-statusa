@@ -223,7 +223,7 @@
             "###################",
             "#P....#.....#....E#",
             "#.##.#.###.#.##.#.#",
-            "#....#.....#....#.#",
+            "#..C.#.....#....#.#",
             "#.####.###.####.#.#",
             "#......#.#......#.#",
             "#.####.#.#.####.#.#",
@@ -231,7 +231,7 @@
             "###.#.####.#.#.####",
             "#...#....#...#....#",
             "#.#.####.#.####.#.#",
-            "#.#......#......#.#",
+            "#.#......#..C...#.#",
             "#.######.#.######.#",
             "#E................#",
             "###################"
@@ -240,7 +240,7 @@
             "###################",
             "#P..#....#...#....#",
             "#.#.#.##.#.#.#.##E#",
-            "#.#...#..#.#...#..#",
+            "#.#...#..#.#...#.C#",
             "#.###.#.##.###.#.##",
             "#...#.#....#...#..#",
             "###.#.####.#.###.##",
@@ -248,7 +248,7 @@
             "#.#.##.#.#.###.#.##",
             "#.#....#...#...#..#",
             "#.####.#####.#.##.#",
-            "#...#..E.....#....#",
+            "#...#..E.....#..C.#",
             "#.#.#####.###.###.#",
             "#....E....#.......#",
             "###################"
@@ -431,6 +431,7 @@
 
         function buildStateFromMap() {
           var cups = {};
+          var croissants = {};
           var enemies = [];
           var player = { x: 1, y: 1, dirX: 0, dirY: 0, nextDirX: 0, nextDirY: 0 };
           var spawnPlayer = { x: 1, y: 1 };
@@ -441,13 +442,14 @@
             for (x = 0; x < WIDTH; x += 1) {
               cell = MAP[y].charAt(x);
               if (cell === ".") cups[x + "," + y] = true;
+              if (cell === "C") croissants[x + "," + y] = true;
               if (cell === "P") {
                 player.x = x;
                 player.y = y;
                 spawnPlayer = { x: x, y: y };
               }
               if (cell === "E") {
-                enemies.push({ x: x, y: y, dirX: 0, dirY: 0 });
+                enemies.push({ x: x, y: y, dirX: 0, dirY: 0, active: true, respawnMs: 0 });
                 spawnEnemies.push({ x: x, y: y });
               }
             }
@@ -459,6 +461,7 @@
             spawnPlayer: spawnPlayer,
             spawnEnemies: spawnEnemies,
             cups: cups,
+            croissants: croissants,
             cupsCount: Object.keys(cups).length,
             gameOver: false,
             won: false,
@@ -468,6 +471,7 @@
             playerMoveMs: 125,
             enemyMoveMs: 190 - currentLevelIndex * 25,
             invulnMs: 0,
+            frightenedMs: 0,
             pulse: 0,
             sentScore: false
           };
@@ -542,6 +546,13 @@
               state.gameOver = true;
             }
           }
+
+          if (state.croissants[key]) {
+            delete state.croissants[key];
+            state.frightenedMs = 7000;
+            totalScore += 5;
+            setHint("Круассан съеден: статусы уязвимы", false);
+          }
         }
 
         function nextEnemyStep(enemy) {
@@ -582,6 +593,7 @@
 
           for (i = 0; i < state.enemies.length; i += 1) {
             enemy = state.enemies[i];
+            if (!enemy.active) continue;
             next = nextEnemyStep(enemy);
             enemy.dirX = next.x;
             enemy.dirY = next.y;
@@ -589,16 +601,69 @@
           }
         }
 
-        function playerCaught() {
-          var i;
-          if (cheatNoDeath) return false;
-          if (!state || state.invulnMs > 0) return false;
+        function findFarthestRespawnPoint() {
+          var candidates = [
+            { x: 1, y: 1 },
+            { x: WIDTH - 2, y: 1 },
+            { x: 1, y: HEIGHT - 2 },
+            { x: WIDTH - 2, y: HEIGHT - 2 }
+          ];
+          var best = null;
+          var bestDist = -1;
+          var i, c, dist;
+          for (i = 0; i < candidates.length; i += 1) {
+            c = candidates[i];
+            if (isWall(c.x, c.y)) continue;
+            dist = Math.abs(c.x - state.player.x) + Math.abs(c.y - state.player.y);
+            if (dist > bestDist) {
+              bestDist = dist;
+              best = c;
+            }
+          }
+          return best || state.spawnPlayer;
+        }
+
+        function eatEnemy(enemy) {
+          var spot = findFarthestRespawnPoint();
+          enemy.active = false;
+          enemy.respawnMs = 3500;
+          enemy.dirX = 0;
+          enemy.dirY = 0;
+          enemy.respawnX = spot.x;
+          enemy.respawnY = spot.y;
+          totalScore += 25;
+        }
+
+        function resolveEnemyContact() {
+          var i, enemy;
+          if (!state) return false;
           for (i = 0; i < state.enemies.length; i += 1) {
-            if (state.enemies[i].x === state.player.x && state.enemies[i].y === state.player.y) {
+            enemy = state.enemies[i];
+            if (!enemy.active) continue;
+            if (enemy.x !== state.player.x || enemy.y !== state.player.y) continue;
+            if (state.frightenedMs > 0) {
+              eatEnemy(enemy);
+              continue;
+            }
+            if (!cheatNoDeath && state.invulnMs <= 0) {
               return true;
             }
           }
           return false;
+        }
+
+        function updateEnemyRespawns(dt) {
+          var i, enemy;
+          for (i = 0; i < state.enemies.length; i += 1) {
+            enemy = state.enemies[i];
+            if (enemy.active) continue;
+            enemy.respawnMs -= dt;
+            if (enemy.respawnMs <= 0) {
+              enemy.active = true;
+              enemy.x = enemy.respawnX;
+              enemy.y = enemy.respawnY;
+            }
+          }
         }
 
         function resetActorsAfterHit() {
@@ -614,6 +679,8 @@
             state.enemies[i].y = state.spawnEnemies[i].y;
             state.enemies[i].dirX = 0;
             state.enemies[i].dirY = 0;
+            state.enemies[i].active = true;
+            state.enemies[i].respawnMs = 0;
           }
           state.playerAccMs = 0;
           state.enemyAccMs = 0;
@@ -691,6 +758,22 @@
           }
         }
 
+        function drawCroissant(x, y) {
+          var px = x * TILE;
+          var py = y * TILE;
+          var bob = Math.sin(state.pulse + x * 0.3 + y * 0.21) * 1.6;
+          var cx = px + TILE / 2;
+          var cy = py + TILE / 2 + bob;
+          ctx.fillStyle = "#e8b46a";
+          ctx.beginPath();
+          ctx.arc(cx - 4, cy, 7, Math.PI * 0.15, Math.PI * 1.85);
+          ctx.fill();
+          ctx.fillStyle = "#f3d08f";
+          ctx.beginPath();
+          ctx.arc(cx - 1, cy, 4.5, Math.PI * 0.2, Math.PI * 1.8);
+          ctx.fill();
+        }
+
         function drawPlayer() {
           var p = state.player;
           var px = p.x * TILE;
@@ -745,15 +828,20 @@
         }
 
         function drawEnemy(enemy) {
+          if (!enemy.active) return;
           var px = enemy.x * TILE;
           var py = enemy.y * TILE;
           var i;
-          ctx.fillStyle = "#fffefb";
+          var blink = state.frightenedMs > 0 && Math.floor(state.frightenedMs / 180) % 2 === 0;
+          if (state.frightenedMs > 0) ctx.fillStyle = blink ? "#ffed8f" : "#8fd8ff";
+          else ctx.fillStyle = "#fffefb";
           ctx.fillRect(px + 7, py + 5, TILE - 14, TILE - 10);
-          ctx.strokeStyle = "#ff5a89";
+          if (state.frightenedMs > 0) ctx.strokeStyle = "#2e4b76";
+          else ctx.strokeStyle = "#ff5a89";
           ctx.lineWidth = 2;
           ctx.strokeRect(px + 7, py + 5, TILE - 14, TILE - 10);
-          ctx.fillStyle = "#ff5a89";
+          if (state.frightenedMs > 0) ctx.fillStyle = "#2e4b76";
+          else ctx.fillStyle = "#ff5a89";
           for (i = 0; i < 3; i += 1) ctx.fillRect(px + 11, py + 12 + i * 8, TILE - 22, 3);
         }
 
@@ -789,6 +877,12 @@
             drawCup(parseInt(parts[0], 10), parseInt(parts[1], 10));
           }
 
+          keys = Object.keys(state.croissants);
+          for (i = 0; i < keys.length; i += 1) {
+            parts = keys[i].split(",");
+            drawCroissant(parseInt(parts[0], 10), parseInt(parts[1], 10));
+          }
+
           for (i = 0; i < state.enemies.length; i += 1) drawEnemy(state.enemies[i]);
           drawPlayer();
           drawOverlay();
@@ -811,16 +905,18 @@
             state.playerAccMs += dt;
             state.enemyAccMs += dt;
             if (state.invulnMs > 0) state.invulnMs -= dt;
+            if (state.frightenedMs > 0) state.frightenedMs -= dt;
+            updateEnemyRespawns(dt);
 
             while (state.playerAccMs >= state.playerMoveMs && !state.gameOver) {
               state.playerAccMs -= state.playerMoveMs;
               updatePlayer();
-              if (playerCaught()) loseLifeOrGame();
+              if (resolveEnemyContact()) loseLifeOrGame();
             }
             while (state.enemyAccMs >= state.enemyMoveMs && !state.gameOver) {
               state.enemyAccMs -= state.enemyMoveMs;
               updateEnemies();
-              if (playerCaught()) loseLifeOrGame();
+              if (resolveEnemyContact()) loseLifeOrGame();
             }
             updateHud();
           }
