@@ -215,23 +215,43 @@
     <script>
       (function () {
         var TILE = 40;
-        var MAP = [
-          "###################",
-          "#P....#.....#....E#",
-          "#.##.#.###.#.##.#.#",
-          "#....#.....#....#.#",
-          "#.####.###.####.#.#",
-          "#......#.#......#.#",
-          "#.####.#.#.####.#.#",
-          "#...#......#...#..#",
-          "###.#.####.#.#.####",
-          "#...#....#...#....#",
-          "#.#.####.#.####.#.#",
-          "#.#......#......#.#",
-          "#.######.#.######.#",
-          "#E.................#",
-          "###################"
+        var LEVELS = [
+          [
+            "###################",
+            "#P....#.....#....E#",
+            "#.##.#.###.#.##.#.#",
+            "#....#.....#....#.#",
+            "#.####.###.####.#.#",
+            "#......#.#......#.#",
+            "#.####.#.#.####.#.#",
+            "#...#......#...#..#",
+            "###.#.####.#.#.####",
+            "#...#....#...#....#",
+            "#.#.####.#.####.#.#",
+            "#.#......#......#.#",
+            "#.######.#.######.#",
+            "#E................#",
+            "###################"
+          ],
+          [
+            "###################",
+            "#P....#..#.....#.E#",
+            "#.##.#.#.#.###.#..#",
+            "#....#.#...#...#..#",
+            "#.####.###.#.###..#",
+            "#......#...#...#..#",
+            "#.####.#.#####.#..#",
+            "#...#......#...#..#",
+            "###.#.####.#.###.##",
+            "#...#....#.#......#",
+            "#.#.####.#.####.#.#",
+            "#.#......#......#.#",
+            "#.######.#.######.#",
+            "#E................#",
+            "###################"
+          ]
         ];
+        var MAP = LEVELS[0];
 
         var canvas = document.getElementById("game");
         var ctx = canvas.getContext("2d");
@@ -248,6 +268,10 @@
         var NAME_KEY = "pobeg_player_name";
         var currentPlayerName = "";
         var gameStarted = false;
+        var currentLevelIndex = 0;
+        var livesLeft = 3;
+        var totalScore = 0;
+        var lastFrameTime = 0;
 
         var WIDTH = MAP[0].length;
         var HEIGHT = MAP.length;
@@ -281,8 +305,7 @@
         var state = null;
 
         function getCurrentScore() {
-          if (!state) return 0;
-          return state.cupsCount - cupsLeft();
+          return totalScore;
         }
 
         function setHint(text, isError) {
@@ -312,7 +335,7 @@
           gameStarted = true;
           startGate.style.display = "none";
           setHint("Игрок: " + name, false);
-          initState();
+          startNewGame();
         }
 
         function drawWaitingScreen() {
@@ -323,7 +346,7 @@
           ctx.fillText("Введи имя и нажми 'Начать игру'", 120, canvas.height / 2 - 10);
           ctx.font = "20px Avenir Next, Trebuchet MS, sans-serif";
           ctx.fillStyle = "#87c9ff";
-          ctx.fillText("Результат отправляется автоматически при проигрыше", 130, canvas.height / 2 + 28);
+          ctx.fillText("Результат отправляется автоматически после раунда", 130, canvas.height / 2 + 28);
         }
 
         function renderLeaderboard(items) {
@@ -397,36 +420,68 @@
           ctx.fillText("Открой файл в Safari/Chrome", 20, 68);
         }
 
-        function initState() {
+        function buildStateFromMap() {
           var cups = {};
           var enemies = [];
           var player = { x: 1, y: 1, dirX: 0, dirY: 0, nextDirX: 0, nextDirY: 0 };
+          var spawnPlayer = { x: 1, y: 1 };
+          var spawnEnemies = [];
           var y, x, cell;
 
           for (y = 0; y < HEIGHT; y += 1) {
             for (x = 0; x < WIDTH; x += 1) {
               cell = MAP[y].charAt(x);
               if (cell === ".") cups[x + "," + y] = true;
-              if (cell === "P") { player.x = x; player.y = y; }
-              if (cell === "E") enemies.push({ x: x, y: y, dirX: 0, dirY: 0 });
+              if (cell === "P") {
+                player.x = x;
+                player.y = y;
+                spawnPlayer = { x: x, y: y };
+              }
+              if (cell === "E") {
+                enemies.push({ x: x, y: y, dirX: 0, dirY: 0 });
+                spawnEnemies.push({ x: x, y: y });
+              }
             }
           }
 
           state = {
             player: player,
             enemies: enemies,
+            spawnPlayer: spawnPlayer,
+            spawnEnemies: spawnEnemies,
             cups: cups,
             cupsCount: Object.keys(cups).length,
             gameOver: false,
             won: false,
-            tick: 0,
-            playerStepDelay: 8,
-            enemyStepDelay: 12,
+            levelCompleteMessageTimer: 0,
+            playerAccMs: 0,
+            enemyAccMs: 0,
+            playerMoveMs: 125,
+            enemyMoveMs: 190 - currentLevelIndex * 25,
+            invulnMs: 0,
             pulse: 0,
             sentScore: false
           };
 
           updateHud();
+        }
+
+        function loadLevel(levelIndex) {
+          currentLevelIndex = levelIndex;
+          MAP = LEVELS[levelIndex];
+          buildStateFromMap();
+          state.levelCompleteMessageTimer = 1200;
+          state.enemyMoveMs = Math.max(110, 190 - currentLevelIndex * 25);
+          state.playerMoveMs = Math.max(90, 125 - currentLevelIndex * 10);
+          updateHud();
+        }
+
+        function startNewGame() {
+          currentLevelIndex = 0;
+          livesLeft = 3;
+          totalScore = 0;
+          lastFrameTime = 0;
+          loadLevel(0);
         }
 
         function cupsLeft() {
@@ -457,8 +512,6 @@
           var p = state.player;
           var key;
 
-          if (state.tick % state.playerStepDelay !== 0) return;
-
           if (!isWall(p.x + p.nextDirX, p.y + p.nextDirY)) {
             p.dirX = p.nextDirX;
             p.dirY = p.nextDirY;
@@ -468,7 +521,13 @@
           key = p.x + "," + p.y;
           if (state.cups[key]) {
             delete state.cups[key];
+            totalScore += 1;
             if (cupsLeft() === 0) {
+              if (currentLevelIndex < LEVELS.length - 1) {
+                loadLevel(currentLevelIndex + 1);
+                setHint("Уровень " + (currentLevelIndex + 1) + " пройден. Переход на следующий.", false);
+                return;
+              }
               state.won = true;
               state.gameOver = true;
             }
@@ -510,7 +569,6 @@
 
         function updateEnemies() {
           var i, enemy, next;
-          if (state.tick % state.enemyStepDelay !== 0) return;
 
           for (i = 0; i < state.enemies.length; i += 1) {
             enemy = state.enemies[i];
@@ -518,26 +576,64 @@
             enemy.dirX = next.x;
             enemy.dirY = next.y;
             tryMove(enemy, enemy.dirX, enemy.dirY);
-
-            if (enemy.x === state.player.x && enemy.y === state.player.y) {
-              state.gameOver = true;
-              state.won = false;
-            }
           }
         }
 
+        function playerCaught() {
+          var i;
+          if (!state || state.invulnMs > 0) return false;
+          for (i = 0; i < state.enemies.length; i += 1) {
+            if (state.enemies[i].x === state.player.x && state.enemies[i].y === state.player.y) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        function resetActorsAfterHit() {
+          var i;
+          state.player.x = state.spawnPlayer.x;
+          state.player.y = state.spawnPlayer.y;
+          state.player.dirX = 0;
+          state.player.dirY = 0;
+          state.player.nextDirX = 0;
+          state.player.nextDirY = 0;
+          for (i = 0; i < state.enemies.length; i += 1) {
+            state.enemies[i].x = state.spawnEnemies[i].x;
+            state.enemies[i].y = state.spawnEnemies[i].y;
+            state.enemies[i].dirX = 0;
+            state.enemies[i].dirY = 0;
+          }
+          state.playerAccMs = 0;
+          state.enemyAccMs = 0;
+          state.invulnMs = 1200;
+        }
+
+        function loseLifeOrGame() {
+          livesLeft -= 1;
+          if (livesLeft <= 0) {
+            livesLeft = 0;
+            state.gameOver = true;
+            state.won = false;
+            setHint("Игра окончена. Все жизни закончились.", true);
+            return;
+          }
+          resetActorsAfterHit();
+          setHint("Минус жизнь. Осталось: " + livesLeft, true);
+        }
+
         function updateHud() {
-          coffeeLeftEl.textContent = "Стаканчиков осталось: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
+          coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + livesLeft + " | Стаканчиков: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
           if (!state || !state.gameOver) {
             statusTextEl.textContent = "Статус: В игре";
             statusTextEl.style.color = "#ebf1ff";
             return;
           }
           if (state.won) {
-            statusTextEl.textContent = "Статус: Победа. Все стаканчики собраны";
+            statusTextEl.textContent = "Статус: Победа. Все уровни пройдены";
             statusTextEl.style.color = "#7effb1";
           } else {
-            statusTextEl.textContent = "Статус: Пойман листом статуса";
+            statusTextEl.textContent = "Статус: Поражение";
             statusTextEl.style.color = "#ff8ab0";
           }
         }
@@ -655,7 +751,7 @@
           ctx.fillText(title, canvas.width / 2 - ctx.measureText(title).width / 2, canvas.height / 2 - 20);
           ctx.fillStyle = "#eaf1ff";
           ctx.font = "24px Avenir Next, Trebuchet MS, sans-serif";
-          subtitle = state.won ? "Ты собрал все стаканчики кофе" : "Статус тебя догнал";
+          subtitle = state.won ? "Ты прошел все уровни" : "Закончились жизни";
           ctx.fillText(subtitle, canvas.width / 2 - ctx.measureText(subtitle).width / 2, canvas.height / 2 + 24);
         }
 
@@ -681,18 +777,34 @@
           drawOverlay();
         }
 
-        function loop() {
+        function loop(timestamp) {
+          var dt, wasGameOver;
           if (!gameStarted || !state) {
             drawWaitingScreen();
+            lastFrameTime = timestamp || 0;
             window.requestAnimationFrame(loop);
             return;
           }
-          var wasGameOver = state.gameOver;
-          state.tick += 1;
-          state.pulse += 0.08;
+          if (!lastFrameTime) lastFrameTime = timestamp || 0;
+          dt = Math.min(80, Math.max(1, (timestamp || 0) - lastFrameTime));
+          lastFrameTime = timestamp || 0;
+          wasGameOver = state.gameOver;
+          state.pulse += 0.08 * (dt / 16.67);
           if (!state.gameOver) {
-            updatePlayer();
-            updateEnemies();
+            state.playerAccMs += dt;
+            state.enemyAccMs += dt;
+            if (state.invulnMs > 0) state.invulnMs -= dt;
+
+            while (state.playerAccMs >= state.playerMoveMs && !state.gameOver) {
+              state.playerAccMs -= state.playerMoveMs;
+              updatePlayer();
+              if (playerCaught()) loseLifeOrGame();
+            }
+            while (state.enemyAccMs >= state.enemyMoveMs && !state.gameOver) {
+              state.enemyAccMs -= state.enemyMoveMs;
+              updateEnemies();
+              if (playerCaught()) loseLifeOrGame();
+            }
             updateHud();
           }
           if (!wasGameOver && state.gameOver) {
@@ -760,7 +872,7 @@
 
         restartBtn.addEventListener("click", function () {
           if (!gameStarted) return;
-          initState();
+          startNewGame();
         }, false);
         startGameBtn.addEventListener("click", startGameSession, false);
         startNameInput.addEventListener("keydown", function (event) {
