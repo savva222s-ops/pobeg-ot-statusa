@@ -195,7 +195,10 @@
 
       <footer class="controls">
         <p>Управление: WASD/стрелки или кнопки снизу на телефоне</p>
-        <button id="restartBtn" type="button">Начать заново</button>
+        <div class="leaderboard-controls">
+          <button id="cheatBtn" class="small-btn" type="button">Чит-код</button>
+          <button id="restartBtn" type="button">Начать заново</button>
+        </div>
       </footer>
       <section id="startGate" class="start-gate">
         <h2>Перед стартом введи имя</h2>
@@ -258,6 +261,7 @@
         var coffeeLeftEl = document.getElementById("coffeeLeft");
         var statusTextEl = document.getElementById("statusText");
         var restartBtn = document.getElementById("restartBtn");
+        var cheatBtn = document.getElementById("cheatBtn");
         var startGate = document.getElementById("startGate");
         var startNameInput = document.getElementById("startNameInput");
         var startGameBtn = document.getElementById("startGameBtn");
@@ -272,6 +276,7 @@
         var livesLeft = 3;
         var totalScore = 0;
         var lastFrameTime = 0;
+        var cheatNoDeath = false;
 
         var WIDTH = MAP[0].length;
         var HEIGHT = MAP.length;
@@ -481,6 +486,7 @@
           livesLeft = 3;
           totalScore = 0;
           lastFrameTime = 0;
+          cheatNoDeath = false;
           loadLevel(0);
         }
 
@@ -581,6 +587,7 @@
 
         function playerCaught() {
           var i;
+          if (cheatNoDeath) return false;
           if (!state || state.invulnMs > 0) return false;
           for (i = 0; i < state.enemies.length; i += 1) {
             if (state.enemies[i].x === state.player.x && state.enemies[i].y === state.player.y) {
@@ -610,6 +617,7 @@
         }
 
         function loseLifeOrGame() {
+          if (cheatNoDeath) return;
           livesLeft -= 1;
           if (livesLeft <= 0) {
             livesLeft = 0;
@@ -872,12 +880,26 @@
           }
         }
 
+        function tryActivateCheat() {
+          var code = window.prompt("Введи чит-код:");
+          if (String(code || "").trim() === "1874") {
+            cheatNoDeath = true;
+            setHint("Чит активирован: статусы не убивают", false);
+            return;
+          }
+          setHint("Неверный чит-код", true);
+        }
+
         window.addEventListener("keydown", handleKeyboardDirection, false);
         document.addEventListener("keydown", handleKeyboardDirection, false);
 
         restartBtn.addEventListener("click", function () {
           if (!gameStarted) return;
           startNewGame();
+        }, false);
+        cheatBtn.addEventListener("click", function () {
+          if (!gameStarted) return;
+          tryActivateCheat();
         }, false);
         startGameBtn.addEventListener("click", startGameSession, false);
         startNameInput.addEventListener("keydown", function (event) {
