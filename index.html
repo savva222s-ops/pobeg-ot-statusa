@@ -384,6 +384,10 @@
         function submitScore(autoMode) {
           var name = currentPlayerName;
           var score = getCurrentScore();
+          if (cheatNoDeath) {
+            setHint("Чит активен: результат не отправляется в рейтинг", true);
+            return Promise.resolve();
+          }
           if (name.length < 2 || name.length > 20) {
             if (!autoMode) setHint("Имя: от 2 до 20 символов", true);
             return Promise.resolve();
