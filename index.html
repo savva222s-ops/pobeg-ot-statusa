@@ -235,7 +235,7 @@
           ],
           [
             "###################",
-            "#P....#..#.....#.E#",
+            "#P....#..#.....#E.#",
             "#.##.#.#.#.###.#..#",
             "#....#.#...#...#..#",
             "#.####.###.#.###..#",
@@ -245,9 +245,9 @@
             "###.#.####.#.###.##",
             "#...#....#.#......#",
             "#.#.####.#.####.#.#",
-            "#.#......#......#.#",
+            "#.#..E...#...E..#.#",
             "#.######.#.######.#",
-            "#E................#",
+            "#.................#",
             "###################"
           ]
         ];
@@ -623,7 +623,10 @@
         }
 
         function updateHud() {
-          coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + livesLeft + " | Стаканчиков: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
+          var hearts = "";
+          var i;
+          for (i = 0; i < 3; i += 1) hearts += i < livesLeft ? "❤️" : "🖤";
+          coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | Стаканчиков: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
           if (!state || !state.gameOver) {
             statusTextEl.textContent = "Статус: В игре";
             statusTextEl.style.color = "#ebf1ff";
@@ -641,9 +644,11 @@
         function drawWall(x, y) {
           var px = x * TILE;
           var py = y * TILE;
-          ctx.fillStyle = "#112045";
+          if (currentLevelIndex === 0) ctx.fillStyle = "#112045";
+          else ctx.fillStyle = "#18331b";
           ctx.fillRect(px, py, TILE, TILE);
-          ctx.strokeStyle = "#2cd6ff";
+          if (currentLevelIndex === 0) ctx.strokeStyle = "#2cd6ff";
+          else ctx.strokeStyle = "#66ff9b";
           ctx.lineWidth = 1;
           ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
         }
