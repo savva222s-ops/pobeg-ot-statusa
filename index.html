@@ -768,47 +768,65 @@
           var bob = Math.sin(state.pulse + x * 0.3 + y * 0.21) * 1.6;
           var cx = px + TILE / 2;
           var cy = py + TILE / 2 + bob;
-          var x1 = cx - 9;
-          var y1 = cy + 6;
-          var x2 = cx + 10;
-          var y2 = cy + 6;
-          var x3 = cx + 1;
-          var y3 = cy - 9;
+          var p1x = cx - 9;
+          var p1y = cy + 6;
+          var p2x = cx + 10;
+          var p2y = cy + 6;
+          var p3x = cx + 2;
+          var p3y = cy - 8;
 
-          ctx.fillStyle = "rgba(65, 35, 80, 0.25)";
+          ctx.fillStyle = "rgba(45, 35, 35, 0.25)";
           ctx.beginPath();
-          ctx.ellipse(cx + 1, cy + 8, 10, 3.8, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx + 1, cy + 8, 11, 4, 0, 0, Math.PI * 2);
           ctx.fill();
 
-          ctx.fillStyle = "#f7d39c";
+          // Cake body
+          ctx.fillStyle = "#f6d9a9";
           ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y2);
-          ctx.lineTo(x3, y3);
+          ctx.moveTo(p1x, p1y);
+          ctx.lineTo(p2x, p2y);
+          ctx.lineTo(p3x, p3y);
           ctx.closePath();
           ctx.fill();
 
-          ctx.fillStyle = "#ff8fb6";
+          // Cream layers
+          ctx.strokeStyle = "#fff6e7";
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.moveTo(x3, y3);
-          ctx.lineTo(x1 + 2, y1 - 1);
-          ctx.lineTo(x2 - 2, y1 - 1);
+          ctx.moveTo(cx - 5, cy + 2);
+          ctx.lineTo(cx + 4, cy + 2);
+          ctx.moveTo(cx - 3, cy - 1);
+          ctx.lineTo(cx + 3, cy - 1);
+          ctx.stroke();
+
+          // Pink frosting top
+          ctx.fillStyle = "#ff7fb0";
+          ctx.beginPath();
+          ctx.moveTo(p3x, p3y);
+          ctx.lineTo(p1x + 2, p1y - 1);
+          ctx.lineTo(p2x - 2, p2y - 1);
           ctx.closePath();
           ctx.fill();
 
-          ctx.fillStyle = "#ffffff";
+          // Cherry
+          ctx.fillStyle = "#d81c3f";
           ctx.beginPath();
-          ctx.arc(cx - 3, cy - 3, 1.7, 0, Math.PI * 2);
-          ctx.arc(cx + 2, cy - 4, 1.4, 0, Math.PI * 2);
-          ctx.arc(cx + 5, cy - 1, 1.2, 0, Math.PI * 2);
+          ctx.arc(cx + 1, cy - 10, 2.2, 0, Math.PI * 2);
           ctx.fill();
+          ctx.strokeStyle = "#7b3c2f";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(cx + 1, cy - 12);
+          ctx.quadraticCurveTo(cx + 4, cy - 14, cx + 5, cy - 11);
+          ctx.stroke();
 
-          ctx.strokeStyle = "#9d5f30";
+          // Cake outline
+          ctx.strokeStyle = "#8f5a2e";
           ctx.lineWidth = 1.2;
           ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y2);
-          ctx.lineTo(x3, y3);
+          ctx.moveTo(p1x, p1y);
+          ctx.lineTo(p2x, p2y);
+          ctx.lineTo(p3x, p3y);
           ctx.closePath();
           ctx.stroke();
         }
