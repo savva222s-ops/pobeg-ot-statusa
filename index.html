@@ -768,67 +768,14 @@
           var bob = Math.sin(state.pulse + x * 0.3 + y * 0.21) * 1.6;
           var cx = px + TILE / 2;
           var cy = py + TILE / 2 + bob;
-          var p1x = cx - 9;
-          var p1y = cy + 6;
-          var p2x = cx + 10;
-          var p2y = cy + 6;
-          var p3x = cx + 2;
-          var p3y = cy - 8;
-
-          ctx.fillStyle = "rgba(45, 35, 35, 0.25)";
+          ctx.fillStyle = "#e8b46a";
           ctx.beginPath();
-          ctx.ellipse(cx + 1, cy + 8, 11, 4, 0, 0, Math.PI * 2);
+          ctx.arc(cx - 4, cy, 7, Math.PI * 0.15, Math.PI * 1.85);
           ctx.fill();
-
-          // Cake body
-          ctx.fillStyle = "#f6d9a9";
+          ctx.fillStyle = "#f3d08f";
           ctx.beginPath();
-          ctx.moveTo(p1x, p1y);
-          ctx.lineTo(p2x, p2y);
-          ctx.lineTo(p3x, p3y);
-          ctx.closePath();
+          ctx.arc(cx - 1, cy, 4.5, Math.PI * 0.2, Math.PI * 1.8);
           ctx.fill();
-
-          // Cream layers
-          ctx.strokeStyle = "#fff6e7";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(cx - 5, cy + 2);
-          ctx.lineTo(cx + 4, cy + 2);
-          ctx.moveTo(cx - 3, cy - 1);
-          ctx.lineTo(cx + 3, cy - 1);
-          ctx.stroke();
-
-          // Pink frosting top
-          ctx.fillStyle = "#ff7fb0";
-          ctx.beginPath();
-          ctx.moveTo(p3x, p3y);
-          ctx.lineTo(p1x + 2, p1y - 1);
-          ctx.lineTo(p2x - 2, p2y - 1);
-          ctx.closePath();
-          ctx.fill();
-
-          // Cherry
-          ctx.fillStyle = "#d81c3f";
-          ctx.beginPath();
-          ctx.arc(cx + 1, cy - 10, 2.2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = "#7b3c2f";
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(cx + 1, cy - 12);
-          ctx.quadraticCurveTo(cx + 4, cy - 14, cx + 5, cy - 11);
-          ctx.stroke();
-
-          // Cake outline
-          ctx.strokeStyle = "#8f5a2e";
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.moveTo(p1x, p1y);
-          ctx.lineTo(p2x, p2y);
-          ctx.lineTo(p3x, p3y);
-          ctx.closePath();
-          ctx.stroke();
         }
 
         function drawPlayer() {
