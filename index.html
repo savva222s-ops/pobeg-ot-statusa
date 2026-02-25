@@ -310,6 +310,7 @@
         var FIXED_STEP_MS = 1000 / 60;
         var MAX_STEPS_PER_FRAME = 5;
         var cheatNoDeath = false;
+        var cheatUsedThisRun = false;
         var BOSS_NAME = "МойОфис";
 
         var WIDTH = MAP[0].length;
@@ -418,8 +419,8 @@
         function submitScore(autoMode) {
           var name = currentPlayerName;
           var score = getCurrentScore();
-          if (cheatNoDeath) {
-            setHint("Чит активен: результат не отправляется в рейтинг", true);
+          if (cheatUsedThisRun) {
+            setHint("В этом раунде использовался чит: результат не отправляется", true);
             return Promise.resolve();
           }
           if (name.length < 2 || name.length > 20) {
@@ -502,7 +503,7 @@
                   active: true,
                   vulnerableMs: 0,
                   dashCdMs: 3000,
-                  summonCdMs: 5500,
+                  shootCdMs: 2600,
                   justHitMs: 0
                 };
                 bossSpawn = { x: x, y: y };
@@ -520,6 +521,8 @@
             cups: cups,
             croissants: croissants,
             seals: seals,
+            bossShots: [],
+            shotAccMs: 0,
             sealRespawnMs: 0,
             cupsCount: Object.keys(cups).length,
             gameOver: false,
@@ -555,6 +558,7 @@
           lastFrameTime = 0;
           logicAccumulatorMs = 0;
           cheatNoDeath = false;
+          cheatUsedThisRun = false;
           loadLevel(0);
         }
 
@@ -720,6 +724,7 @@
 
         function hitBoss() {
           var spot = findFarthestRespawnPoint();
+          var prevHp = state.boss.hp;
           state.boss.hp -= 1;
           state.boss.justHitMs = 900;
           state.boss.vulnerableMs = 0;
@@ -729,6 +734,10 @@
           state.boss.dirY = 0;
           totalScore += 60;
           setHint(BOSS_NAME + " получил удар. HP: " + state.boss.hp, false);
+          if ((prevHp === 3 || prevHp === 2) && activeEnemyCount() < 8) {
+            spawnStatusAtFarthest();
+            setHint(BOSS_NAME + " усилился и вызвал статус", true);
+          }
           if (state.boss.hp <= 0) {
             state.boss.active = false;
             totalScore += 150;
@@ -736,6 +745,12 @@
             state.gameOver = true;
             setHint("Босс " + BOSS_NAME + " побежден!", false);
           }
+        }
+
+        function spawnStatusAtFarthest() {
+          var spot = findFarthestRespawnPoint();
+          state.enemies.push({ x: spot.x, y: spot.y, dirX: 0, dirY: 0, active: true, respawnMs: 0 });
+          state.spawnEnemies.push({ x: spot.x, y: spot.y });
         }
 
         function resolveEnemyContact() {
@@ -779,6 +794,56 @@
           }
         }
 
+        function fireBossLaser() {
+          var boss = state.boss;
+          var patterns = [
+            [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }],
+            [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }],
+            [{ dx: -1, dy: 0 }, { dx: 0, dy: -1 }],
+            [{ dx: 1, dy: 0 }, { dx: 0, dy: -1 }],
+            [{ dx: -1, dy: 0 }, { dx: 0, dy: 1 }]
+          ];
+          var pick = patterns[Math.floor(Math.random() * patterns.length)];
+          var i, p;
+          for (i = 0; i < pick.length; i += 1) {
+            p = pick[i];
+            state.bossShots.push({
+              x: boss.x,
+              y: boss.y,
+              dx: p.dx,
+              dy: p.dy,
+              active: true
+            });
+          }
+        }
+
+        function updateBossShots(dt) {
+          var i, s, nx, ny;
+          state.shotAccMs += dt;
+          while (state.shotAccMs >= 110) {
+            state.shotAccMs -= 110;
+            for (i = 0; i < state.bossShots.length; i += 1) {
+              s = state.bossShots[i];
+              if (!s.active) continue;
+              nx = s.x + s.dx;
+              ny = s.y + s.dy;
+              if (isWall(nx, ny)) {
+                s.active = false;
+                continue;
+              }
+              s.x = nx;
+              s.y = ny;
+              if (s.x === state.player.x && s.y === state.player.y) {
+                s.active = false;
+                if (!cheatNoDeath && state.invulnMs <= 0) {
+                  loseLifeOrGame();
+                }
+              }
+            }
+            state.bossShots = state.bossShots.filter(function (shot) { return shot.active; });
+          }
+        }
+
         function updateSeals(dt) {
           var spot, key;
           if (!state.boss || !state.boss.active) return;
@@ -799,12 +864,12 @@
           if (!state.boss || !state.boss.active) return;
           if (state.boss.vulnerableMs > 0) state.boss.vulnerableMs -= dt;
           if (state.boss.dashCdMs > 0) state.boss.dashCdMs -= dt;
-          if (state.boss.summonCdMs > 0) state.boss.summonCdMs -= dt;
+          if (state.boss.shootCdMs > 0) state.boss.shootCdMs -= dt;
           if (state.boss.justHitMs > 0) state.boss.justHitMs -= dt;
         }
 
         function updateBossStep() {
-          var boss, next, phase, spot;
+          var boss, next, phase;
           if (!state.boss || !state.boss.active) return;
           boss = state.boss;
           phase = boss.hp >= 3 ? 1 : (boss.hp === 2 ? 2 : 3);
@@ -819,12 +884,9 @@
             boss.dashCdMs = phase === 2 ? 2600 : 2100;
           }
 
-          if (phase === 3 && boss.summonCdMs <= 0 && activeEnemyCount() < 6) {
-            spot = findFarthestRespawnPoint();
-            state.enemies.push({ x: spot.x, y: spot.y, dirX: 0, dirY: 0, active: true, respawnMs: 0 });
-            state.spawnEnemies.push({ x: spot.x, y: spot.y });
-            boss.summonCdMs = 5200;
-            setHint(BOSS_NAME + " вызвал новый статус", true);
+          if (boss.shootCdMs <= 0) {
+            fireBossLaser();
+            boss.shootCdMs = phase === 1 ? 3000 : (phase === 2 ? 2400 : 1800);
           }
         }
 
@@ -851,7 +913,10 @@
             state.boss.dirY = 0;
             state.boss.vulnerableMs = 0;
             state.boss.justHitMs = 0;
+            state.boss.shootCdMs = 2200;
           }
+          state.bossShots = [];
+          state.shotAccMs = 0;
           state.playerAccMs = 0;
           state.enemyAccMs = 0;
           state.invulnMs = 1200;
@@ -878,7 +943,7 @@
           for (i = 0; i < 3; i += 1) hearts += i < livesLeft ? "❤️" : "🖤";
           if (state && state.boss && state.boss.active) {
             for (i = 0; i < state.boss.hp; i += 1) bossHp += "🟥";
-            coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | " + BOSS_NAME + " HP: " + bossHp + " | Стаканчиков: " + cupsLeft() + " | Очки: " + getCurrentScore();
+            coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | " + BOSS_NAME + " HP: " + bossHp + " | Печати: " + Object.keys(state.seals).length + " | Очки: " + getCurrentScore();
           } else {
             coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | Стаканчиков: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
           }
@@ -1058,16 +1123,35 @@
           py = py + TILE / 2 - size / 2;
 
           blink = boss.vulnerableMs > 0 && Math.floor(boss.vulnerableMs / 150) % 2 === 0;
-          ctx.fillStyle = boss.vulnerableMs > 0 ? (blink ? "#ffd166" : "#ffe8a8") : "#fff4ea";
+          ctx.fillStyle = boss.vulnerableMs > 0 ? (blink ? "#b7ff94" : "#d8ffc6") : "#70d87a";
           ctx.fillRect(px, py, size, size);
-          ctx.strokeStyle = boss.vulnerableMs > 0 ? "#7d5d2f" : "#c55e7c";
+          ctx.strokeStyle = boss.vulnerableMs > 0 ? "#2d6a34" : "#2f7a3a";
           ctx.lineWidth = 3;
           ctx.strokeRect(px, py, size, size);
-          ctx.fillStyle = "#c55e7c";
+          ctx.fillStyle = "#1f4f28";
           ctx.font = "bold 12px Trebuchet MS, sans-serif";
           ctx.fillText(BOSS_NAME, px + 4, py + 14);
-          ctx.fillStyle = boss.vulnerableMs > 0 ? "#7d5d2f" : "#e0618e";
+          ctx.fillStyle = boss.vulnerableMs > 0 ? "#2d6a34" : "#23622f";
           ctx.fillRect(px + 8, py + size - 16, size - 16, 6);
+        }
+
+        function drawBossShots() {
+          var i, s, px, py;
+          for (i = 0; i < state.bossShots.length; i += 1) {
+            s = state.bossShots[i];
+            px = s.x * TILE + TILE / 2;
+            py = s.y * TILE + TILE / 2;
+            ctx.strokeStyle = "#ff4545";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(px - s.dx * 7, py - s.dy * 7);
+            ctx.lineTo(px + s.dx * 7, py + s.dy * 7);
+            ctx.stroke();
+            ctx.fillStyle = "#ffd4d4";
+            ctx.beginPath();
+            ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
 
         function drawOverlay() {
@@ -1116,6 +1200,7 @@
 
           for (i = 0; i < state.enemies.length; i += 1) drawEnemy(state.enemies[i]);
           drawBoss();
+          drawBossShots();
           drawPlayer();
           drawOverlay();
         }
@@ -1131,6 +1216,7 @@
             updateEnemyRespawns(dt);
             updateBossTimers(dt);
             updateSeals(dt);
+            updateBossShots(dt);
 
             while (state.playerAccMs >= state.playerMoveMs && !state.gameOver) {
               state.playerAccMs -= state.playerMoveMs;
@@ -1235,8 +1321,10 @@
         function tryActivateCheat() {
           var code = window.prompt("Введи чит-код:");
           if (String(code || "").trim() === "1874") {
-            cheatNoDeath = true;
-            setHint("Чит активирован: статусы не убивают", false);
+            cheatNoDeath = !cheatNoDeath;
+            cheatUsedThisRun = true;
+            if (cheatNoDeath) setHint("Чит включен: бессмертие активно", false);
+            else setHint("Чит выключен: бессмертие отключено", true);
             return;
           }
           setHint("Неверный чит-код", true);
