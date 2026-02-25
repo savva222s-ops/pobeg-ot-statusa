@@ -209,6 +209,7 @@
       <footer class="controls">
         <p>Управление: WASD/стрелки или кнопки снизу на телефоне</p>
         <div class="leaderboard-controls">
+          <button id="pauseBtn" class="small-btn" type="button">Пауза</button>
           <button id="cheatBtn" class="small-btn" type="button">Чит-код</button>
           <button id="restartBtn" type="button">Начать заново</button>
         </div>
@@ -291,6 +292,7 @@
         var coffeeLeftEl = document.getElementById("coffeeLeft");
         var statusTextEl = document.getElementById("statusText");
         var restartBtn = document.getElementById("restartBtn");
+        var pauseBtn = document.getElementById("pauseBtn");
         var cheatBtn = document.getElementById("cheatBtn");
         var startGate = document.getElementById("startGate");
         var startNameInput = document.getElementById("startNameInput");
@@ -311,6 +313,7 @@
         var MAX_STEPS_PER_FRAME = 5;
         var cheatNoDeath = false;
         var cheatUsedThisRun = false;
+        var isPaused = false;
         var BOSS_NAME = "МойОфис";
 
         var WIDTH = MAP[0].length;
@@ -503,7 +506,6 @@
                   active: true,
                   vulnerableMs: 0,
                   dashCdMs: 3000,
-                  shootCdMs: 2600,
                   justHitMs: 0
                 };
                 bossSpawn = { x: x, y: y };
@@ -521,8 +523,6 @@
             cups: cups,
             croissants: croissants,
             seals: seals,
-            bossShots: [],
-            shotAccMs: 0,
             sealRespawnMs: 0,
             cupsCount: Object.keys(cups).length,
             gameOver: false,
@@ -559,6 +559,8 @@
           logicAccumulatorMs = 0;
           cheatNoDeath = false;
           cheatUsedThisRun = false;
+          isPaused = false;
+          pauseBtn.textContent = "Пауза";
           loadLevel(0);
         }
 
@@ -794,56 +796,6 @@
           }
         }
 
-        function fireBossLaser() {
-          var boss = state.boss;
-          var patterns = [
-            [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }],
-            [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }],
-            [{ dx: -1, dy: 0 }, { dx: 0, dy: -1 }],
-            [{ dx: 1, dy: 0 }, { dx: 0, dy: -1 }],
-            [{ dx: -1, dy: 0 }, { dx: 0, dy: 1 }]
-          ];
-          var pick = patterns[Math.floor(Math.random() * patterns.length)];
-          var i, p;
-          for (i = 0; i < pick.length; i += 1) {
-            p = pick[i];
-            state.bossShots.push({
-              x: boss.x,
-              y: boss.y,
-              dx: p.dx,
-              dy: p.dy,
-              active: true
-            });
-          }
-        }
-
-        function updateBossShots(dt) {
-          var i, s, nx, ny;
-          state.shotAccMs += dt;
-          while (state.shotAccMs >= 110) {
-            state.shotAccMs -= 110;
-            for (i = 0; i < state.bossShots.length; i += 1) {
-              s = state.bossShots[i];
-              if (!s.active) continue;
-              nx = s.x + s.dx;
-              ny = s.y + s.dy;
-              if (isWall(nx, ny)) {
-                s.active = false;
-                continue;
-              }
-              s.x = nx;
-              s.y = ny;
-              if (s.x === state.player.x && s.y === state.player.y) {
-                s.active = false;
-                if (!cheatNoDeath && state.invulnMs <= 0) {
-                  loseLifeOrGame();
-                }
-              }
-            }
-            state.bossShots = state.bossShots.filter(function (shot) { return shot.active; });
-          }
-        }
-
         function updateSeals(dt) {
           var spot, key;
           if (!state.boss || !state.boss.active) return;
@@ -864,7 +816,6 @@
           if (!state.boss || !state.boss.active) return;
           if (state.boss.vulnerableMs > 0) state.boss.vulnerableMs -= dt;
           if (state.boss.dashCdMs > 0) state.boss.dashCdMs -= dt;
-          if (state.boss.shootCdMs > 0) state.boss.shootCdMs -= dt;
           if (state.boss.justHitMs > 0) state.boss.justHitMs -= dt;
         }
 
@@ -884,10 +835,6 @@
             boss.dashCdMs = phase === 2 ? 2600 : 2100;
           }
 
-          if (boss.shootCdMs <= 0) {
-            fireBossLaser();
-            boss.shootCdMs = phase === 1 ? 3000 : (phase === 2 ? 2400 : 1800);
-          }
         }
 
         function resetActorsAfterHit() {
@@ -913,10 +860,7 @@
             state.boss.dirY = 0;
             state.boss.vulnerableMs = 0;
             state.boss.justHitMs = 0;
-            state.boss.shootCdMs = 2200;
           }
-          state.bossShots = [];
-          state.shotAccMs = 0;
           state.playerAccMs = 0;
           state.enemyAccMs = 0;
           state.invulnMs = 1200;
@@ -1135,25 +1079,6 @@
           ctx.fillRect(px + 8, py + size - 16, size - 16, 6);
         }
 
-        function drawBossShots() {
-          var i, s, px, py;
-          for (i = 0; i < state.bossShots.length; i += 1) {
-            s = state.bossShots[i];
-            px = s.x * TILE + TILE / 2;
-            py = s.y * TILE + TILE / 2;
-            ctx.strokeStyle = "#ff4545";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(px - s.dx * 7, py - s.dy * 7);
-            ctx.lineTo(px + s.dx * 7, py + s.dy * 7);
-            ctx.stroke();
-            ctx.fillStyle = "#ffd4d4";
-            ctx.beginPath();
-            ctx.arc(px, py, 2.2, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-
         function drawOverlay() {
           var title, subtitle;
           if (!state.gameOver) return;
@@ -1200,9 +1125,17 @@
 
           for (i = 0; i < state.enemies.length; i += 1) drawEnemy(state.enemies[i]);
           drawBoss();
-          drawBossShots();
           drawPlayer();
           drawOverlay();
+          if (isPaused) {
+            ctx.fillStyle = "rgba(6, 10, 18, 0.65)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#eaf1ff";
+            ctx.font = "bold 46px Avenir Next, Trebuchet MS, sans-serif";
+            ctx.fillText("ПАУЗА", canvas.width / 2 - 90, canvas.height / 2 - 8);
+            ctx.font = "20px Avenir Next, Trebuchet MS, sans-serif";
+            ctx.fillText("Нажми P или кнопку 'Пауза'", canvas.width / 2 - 150, canvas.height / 2 + 28);
+          }
         }
 
         function advanceGame(dt) {
@@ -1216,7 +1149,6 @@
             updateEnemyRespawns(dt);
             updateBossTimers(dt);
             updateSeals(dt);
-            updateBossShots(dt);
 
             while (state.playerAccMs >= state.playerMoveMs && !state.gameOver) {
               state.playerAccMs -= state.playerMoveMs;
@@ -1241,6 +1173,13 @@
           if (!gameStarted || !state) {
             drawWaitingScreen();
             lastFrameTime = timestamp || 0;
+            window.requestAnimationFrame(loop);
+            return;
+          }
+          if (isPaused) {
+            lastFrameTime = (typeof performance !== "undefined" && performance.now) ? performance.now() : (timestamp || Date.now());
+            logicAccumulatorMs = 0;
+            render();
             window.requestAnimationFrame(loop);
             return;
           }
@@ -1316,6 +1255,13 @@
           if (handled && gameStarted) {
             event.preventDefault();
           }
+          if ((key === "p" || code === "KeyP") && gameStarted) {
+            isPaused = !isPaused;
+            pauseBtn.textContent = isPaused ? "Продолжить" : "Пауза";
+            if (isPaused) setHint("Пауза включена", false);
+            else setHint("Игра продолжена", false);
+            event.preventDefault();
+          }
         }
 
         function tryActivateCheat() {
@@ -1336,6 +1282,13 @@
         restartBtn.addEventListener("click", function () {
           if (!gameStarted) return;
           startNewGame();
+        }, false);
+        pauseBtn.addEventListener("click", function () {
+          if (!gameStarted || !state || state.gameOver) return;
+          isPaused = !isPaused;
+          pauseBtn.textContent = isPaused ? "Продолжить" : "Пауза";
+          if (isPaused) setHint("Пауза включена", false);
+          else setHint("Игра продолжена", false);
         }, false);
         cheatBtn.addEventListener("click", function () {
           if (!gameStarted) return;
