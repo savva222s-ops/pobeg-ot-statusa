@@ -276,6 +276,9 @@
         var livesLeft = 3;
         var totalScore = 0;
         var lastFrameTime = 0;
+        var logicAccumulatorMs = 0;
+        var FIXED_STEP_MS = 1000 / 60;
+        var MAX_STEPS_PER_FRAME = 5;
         var cheatNoDeath = false;
 
         var WIDTH = MAP[0].length;
@@ -494,6 +497,7 @@
           livesLeft = 3;
           totalScore = 0;
           lastFrameTime = 0;
+          logicAccumulatorMs = 0;
           cheatNoDeath = false;
           loadLevel(0);
         }
@@ -888,18 +892,8 @@
           drawOverlay();
         }
 
-        function loop(timestamp) {
-          var dt, wasGameOver;
-          if (!gameStarted || !state) {
-            drawWaitingScreen();
-            lastFrameTime = timestamp || 0;
-            window.requestAnimationFrame(loop);
-            return;
-          }
-          if (!lastFrameTime) lastFrameTime = timestamp || 0;
-          dt = Math.min(80, Math.max(1, (timestamp || 0) - lastFrameTime));
-          lastFrameTime = timestamp || 0;
-          wasGameOver = state.gameOver;
+        function advanceGame(dt) {
+          var wasGameOver = state.gameOver;
           state.pulse += 0.08 * (dt / 16.67);
           if (!state.gameOver) {
             state.playerAccMs += dt;
@@ -923,6 +917,33 @@
           if (!wasGameOver && state.gameOver) {
             submitScore(true);
           }
+        }
+
+        function loop(timestamp) {
+          var now, dt, steps;
+          if (!gameStarted || !state) {
+            drawWaitingScreen();
+            lastFrameTime = timestamp || 0;
+            window.requestAnimationFrame(loop);
+            return;
+          }
+          now = (typeof performance !== "undefined" && performance.now) ? performance.now() : (timestamp || Date.now());
+          if (!lastFrameTime) lastFrameTime = now;
+          dt = now - lastFrameTime;
+          lastFrameTime = now;
+          dt = Math.max(0, Math.min(100, dt));
+          logicAccumulatorMs += dt;
+
+          steps = 0;
+          while (logicAccumulatorMs >= FIXED_STEP_MS && steps < MAX_STEPS_PER_FRAME) {
+            advanceGame(FIXED_STEP_MS);
+            logicAccumulatorMs -= FIXED_STEP_MS;
+            steps += 1;
+          }
+          if (steps === MAX_STEPS_PER_FRAME) {
+            logicAccumulatorMs = 0;
+          }
+
           render();
           window.requestAnimationFrame(loop);
         }
