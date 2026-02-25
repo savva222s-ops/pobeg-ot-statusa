@@ -555,7 +555,7 @@
             delete state.croissants[key];
             state.frightenedMs = 7000;
             totalScore += 5;
-            setHint("Круассан съеден: статусы уязвимы", false);
+            setHint("Кусок торта съеден: статусы уязвимы", false);
           }
         }
 
@@ -768,40 +768,48 @@
           var bob = Math.sin(state.pulse + x * 0.3 + y * 0.21) * 1.6;
           var cx = px + TILE / 2;
           var cy = py + TILE / 2 + bob;
-          var w = 24;
-          var h = 14;
+          var x1 = cx - 9;
+          var y1 = cy + 6;
+          var x2 = cx + 10;
+          var y2 = cy + 6;
+          var x3 = cx + 1;
+          var y3 = cy - 9;
 
-          ctx.fillStyle = "rgba(70, 45, 15, 0.28)";
+          ctx.fillStyle = "rgba(65, 35, 80, 0.25)";
           ctx.beginPath();
-          ctx.ellipse(cx + 1, cy + 8, 11, 4, 0, 0, Math.PI * 2);
+          ctx.ellipse(cx + 1, cy + 8, 10, 3.8, 0, 0, Math.PI * 2);
           ctx.fill();
 
-          ctx.fillStyle = "#d98d35";
+          ctx.fillStyle = "#f7d39c";
           ctx.beginPath();
-          ctx.moveTo(cx - w / 2, cy + 2);
-          ctx.quadraticCurveTo(cx - 10, cy - 6, cx - 2, cy - h / 2);
-          ctx.quadraticCurveTo(cx + 10, cy - 6, cx + w / 2, cy + 2);
-          ctx.quadraticCurveTo(cx + 1, cy + h / 2 + 2, cx - w / 2, cy + 2);
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.lineTo(x3, y3);
           ctx.closePath();
           ctx.fill();
 
-          ctx.fillStyle = "#f4c981";
+          ctx.fillStyle = "#ff8fb6";
           ctx.beginPath();
-          ctx.moveTo(cx - 9, cy + 2);
-          ctx.quadraticCurveTo(cx - 2, cy - 4, cx + 9, cy + 2);
-          ctx.quadraticCurveTo(cx + 1, cy + 6, cx - 9, cy + 2);
+          ctx.moveTo(x3, y3);
+          ctx.lineTo(x1 + 2, y1 - 1);
+          ctx.lineTo(x2 - 2, y1 - 1);
           ctx.closePath();
           ctx.fill();
 
-          ctx.strokeStyle = "#9f6226";
-          ctx.lineWidth = 1.4;
+          ctx.fillStyle = "#ffffff";
           ctx.beginPath();
-          ctx.moveTo(cx - 6, cy - 1);
-          ctx.lineTo(cx - 4, cy + 4);
-          ctx.moveTo(cx, cy - 2);
-          ctx.lineTo(cx, cy + 5);
-          ctx.moveTo(cx + 6, cy - 1);
-          ctx.lineTo(cx + 4, cy + 4);
+          ctx.arc(cx - 3, cy - 3, 1.7, 0, Math.PI * 2);
+          ctx.arc(cx + 2, cy - 4, 1.4, 0, Math.PI * 2);
+          ctx.arc(cx + 5, cy - 1, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "#9d5f30";
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.lineTo(x3, y3);
+          ctx.closePath();
           ctx.stroke();
         }
 
