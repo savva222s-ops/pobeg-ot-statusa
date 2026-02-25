@@ -165,9 +165,22 @@
       }
       .dir-btn.active { transform: scale(0.98); filter: brightness(1.15); }
       @media (max-width: 720px) {
+        .app {
+          width: 100vw;
+          min-height: 100vh;
+          padding: 10px;
+          border-radius: 0;
+          border-left: 0;
+          border-right: 0;
+        }
         .hud, .controls { flex-direction: column; align-items: flex-start; }
         .stats { text-align: left; }
         .mobile-controls { display: grid; }
+        .start-gate, .leaderboard { padding: 10px; }
+        canvas {
+          width: 100%;
+          max-height: 72vh;
+        }
       }
     </style>
   </head>
@@ -252,6 +265,23 @@
             "#.#.#####.###.###.#",
             "#....E....#.......#",
             "###################"
+          ],
+          [
+            "###################",
+            "#P....#....S......#",
+            "#.##.#.#.#####.##.#",
+            "#....#.#.....#....#",
+            "###.##.###.#.##.###",
+            "#...#....#.#....#.#",
+            "#.#.#.##.#.##.#.#.#",
+            "#.#...#..B..#...#.#",
+            "#.###.#.###.#.###.#",
+            "#.....#..S..#.....#",
+            "###.#.#####.#.#.###",
+            "#...#...#...#.#...#",
+            "#.#####.#.#####.#.#",
+            "#......S..........#",
+            "###################"
           ]
         ];
         var MAP = LEVELS[0];
@@ -280,6 +310,7 @@
         var FIXED_STEP_MS = 1000 / 60;
         var MAX_STEPS_PER_FRAME = 5;
         var cheatNoDeath = false;
+        var BOSS_NAME = "МойОфис";
 
         var WIDTH = MAP[0].length;
         var HEIGHT = MAP.length;
@@ -435,10 +466,13 @@
         function buildStateFromMap() {
           var cups = {};
           var croissants = {};
+          var seals = {};
           var enemies = [];
           var player = { x: 1, y: 1, dirX: 0, dirY: 0, nextDirX: 0, nextDirY: 0 };
           var spawnPlayer = { x: 1, y: 1 };
           var spawnEnemies = [];
+          var boss = null;
+          var bossSpawn = null;
           var y, x, cell;
 
           for (y = 0; y < HEIGHT; y += 1) {
@@ -446,6 +480,7 @@
               cell = MAP[y].charAt(x);
               if (cell === ".") cups[x + "," + y] = true;
               if (cell === "C") croissants[x + "," + y] = true;
+              if (cell === "S") seals[x + "," + y] = true;
               if (cell === "P") {
                 player.x = x;
                 player.y = y;
@@ -455,6 +490,23 @@
                 enemies.push({ x: x, y: y, dirX: 0, dirY: 0, active: true, respawnMs: 0 });
                 spawnEnemies.push({ x: x, y: y });
               }
+              if (cell === "B") {
+                boss = {
+                  x: x,
+                  y: y,
+                  spawnX: x,
+                  spawnY: y,
+                  dirX: 0,
+                  dirY: 0,
+                  hp: 3,
+                  active: true,
+                  vulnerableMs: 0,
+                  dashCdMs: 3000,
+                  summonCdMs: 5500,
+                  justHitMs: 0
+                };
+                bossSpawn = { x: x, y: y };
+              }
             }
           }
 
@@ -463,8 +515,12 @@
             enemies: enemies,
             spawnPlayer: spawnPlayer,
             spawnEnemies: spawnEnemies,
+            boss: boss,
+            bossSpawn: bossSpawn,
             cups: cups,
             croissants: croissants,
+            seals: seals,
+            sealRespawnMs: 0,
             cupsCount: Object.keys(cups).length,
             gameOver: false,
             won: false,
@@ -541,6 +597,10 @@
             delete state.cups[key];
             totalScore += 1;
             if (cupsLeft() === 0) {
+              if (state.boss && state.boss.active) {
+                setHint("Стаканчики собраны. Добей босса " + BOSS_NAME, false);
+                return;
+              }
               if (currentLevelIndex < LEVELS.length - 1) {
                 loadLevel(currentLevelIndex + 1);
                 setHint("Уровень " + (currentLevelIndex + 1) + " пройден. Переход на следующий.", false);
@@ -555,7 +615,19 @@
             delete state.croissants[key];
             state.frightenedMs = 7000;
             totalScore += 5;
-            setHint("Кусок торта съеден: статусы уязвимы", false);
+            setHint("Круассан съеден: статусы уязвимы", false);
+          }
+
+          if (state.seals[key]) {
+            delete state.seals[key];
+            totalScore += 10;
+            if (state.boss && state.boss.active) {
+              state.boss.vulnerableMs = 5000;
+              if (Object.keys(state.seals).length === 0 && state.boss.hp > 1) {
+                state.sealRespawnMs = 9000;
+              }
+              setHint("Печать активирована: " + BOSS_NAME + " уязвим", false);
+            }
           }
         }
 
@@ -605,6 +677,14 @@
           }
         }
 
+        function activeEnemyCount() {
+          var i, count = 0;
+          for (i = 0; i < state.enemies.length; i += 1) {
+            if (state.enemies[i].active) count += 1;
+          }
+          return count;
+        }
+
         function findFarthestRespawnPoint() {
           var candidates = [
             { x: 1, y: 1 },
@@ -638,6 +718,26 @@
           totalScore += 25;
         }
 
+        function hitBoss() {
+          var spot = findFarthestRespawnPoint();
+          state.boss.hp -= 1;
+          state.boss.justHitMs = 900;
+          state.boss.vulnerableMs = 0;
+          state.boss.x = spot.x;
+          state.boss.y = spot.y;
+          state.boss.dirX = 0;
+          state.boss.dirY = 0;
+          totalScore += 60;
+          setHint(BOSS_NAME + " получил удар. HP: " + state.boss.hp, false);
+          if (state.boss.hp <= 0) {
+            state.boss.active = false;
+            totalScore += 150;
+            state.won = true;
+            state.gameOver = true;
+            setHint("Босс " + BOSS_NAME + " побежден!", false);
+          }
+        }
+
         function resolveEnemyContact() {
           var i, enemy;
           if (!state) return false;
@@ -650,6 +750,15 @@
               continue;
             }
             if (!cheatNoDeath && state.invulnMs <= 0) {
+              return true;
+            }
+          }
+          if (state.boss && state.boss.active && state.boss.x === state.player.x && state.boss.y === state.player.y) {
+            if (state.boss.vulnerableMs > 0) {
+              hitBoss();
+              return false;
+            }
+            if (!cheatNoDeath && state.invulnMs <= 0 && state.boss.justHitMs <= 0) {
               return true;
             }
           }
@@ -670,6 +779,55 @@
           }
         }
 
+        function updateSeals(dt) {
+          var spot, key;
+          if (!state.boss || !state.boss.active) return;
+          if (state.boss.hp <= 0) return;
+          if (Object.keys(state.seals).length > 0) return;
+          if (state.boss.vulnerableMs > 0) return;
+          if (state.sealRespawnMs <= 0) state.sealRespawnMs = 9000;
+          state.sealRespawnMs -= dt;
+          if (state.sealRespawnMs > 0) return;
+          spot = findFarthestRespawnPoint();
+          key = spot.x + "," + spot.y;
+          state.seals[key] = true;
+          state.sealRespawnMs = 0;
+          setHint("Появилась новая печать для босса", false);
+        }
+
+        function updateBossTimers(dt) {
+          if (!state.boss || !state.boss.active) return;
+          if (state.boss.vulnerableMs > 0) state.boss.vulnerableMs -= dt;
+          if (state.boss.dashCdMs > 0) state.boss.dashCdMs -= dt;
+          if (state.boss.summonCdMs > 0) state.boss.summonCdMs -= dt;
+          if (state.boss.justHitMs > 0) state.boss.justHitMs -= dt;
+        }
+
+        function updateBossStep() {
+          var boss, next, phase, spot;
+          if (!state.boss || !state.boss.active) return;
+          boss = state.boss;
+          phase = boss.hp >= 3 ? 1 : (boss.hp === 2 ? 2 : 3);
+
+          next = nextEnemyStep(boss);
+          boss.dirX = next.x;
+          boss.dirY = next.y;
+          tryMove(boss, boss.dirX, boss.dirY);
+
+          if (phase >= 2 && boss.dashCdMs <= 0) {
+            tryMove(boss, boss.dirX, boss.dirY);
+            boss.dashCdMs = phase === 2 ? 2600 : 2100;
+          }
+
+          if (phase === 3 && boss.summonCdMs <= 0 && activeEnemyCount() < 6) {
+            spot = findFarthestRespawnPoint();
+            state.enemies.push({ x: spot.x, y: spot.y, dirX: 0, dirY: 0, active: true, respawnMs: 0 });
+            state.spawnEnemies.push({ x: spot.x, y: spot.y });
+            boss.summonCdMs = 5200;
+            setHint(BOSS_NAME + " вызвал новый статус", true);
+          }
+        }
+
         function resetActorsAfterHit() {
           var i;
           state.player.x = state.spawnPlayer.x;
@@ -685,6 +843,14 @@
             state.enemies[i].dirY = 0;
             state.enemies[i].active = true;
             state.enemies[i].respawnMs = 0;
+          }
+          if (state.boss && state.boss.active) {
+            state.boss.x = state.boss.spawnX;
+            state.boss.y = state.boss.spawnY;
+            state.boss.dirX = 0;
+            state.boss.dirY = 0;
+            state.boss.vulnerableMs = 0;
+            state.boss.justHitMs = 0;
           }
           state.playerAccMs = 0;
           state.enemyAccMs = 0;
@@ -707,9 +873,15 @@
 
         function updateHud() {
           var hearts = "";
+          var bossHp = "";
           var i;
           for (i = 0; i < 3; i += 1) hearts += i < livesLeft ? "❤️" : "🖤";
-          coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | Стаканчиков: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
+          if (state && state.boss && state.boss.active) {
+            for (i = 0; i < state.boss.hp; i += 1) bossHp += "🟥";
+            coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | " + BOSS_NAME + " HP: " + bossHp + " | Стаканчиков: " + cupsLeft() + " | Очки: " + getCurrentScore();
+          } else {
+            coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | Стаканчиков: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
+          }
           if (!state || !state.gameOver) {
             statusTextEl.textContent = "Статус: В игре";
             statusTextEl.style.color = "#ebf1ff";
@@ -728,10 +900,12 @@
           var px = x * TILE;
           var py = y * TILE;
           if (currentLevelIndex === 0) ctx.fillStyle = "#112045";
-          else ctx.fillStyle = "#18331b";
+          else if (currentLevelIndex === 1) ctx.fillStyle = "#18331b";
+          else ctx.fillStyle = "#3a2516";
           ctx.fillRect(px, py, TILE, TILE);
           if (currentLevelIndex === 0) ctx.strokeStyle = "#2cd6ff";
-          else ctx.strokeStyle = "#66ff9b";
+          else if (currentLevelIndex === 1) ctx.strokeStyle = "#66ff9b";
+          else ctx.strokeStyle = "#ffb37a";
           ctx.lineWidth = 1;
           ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
         }
@@ -776,6 +950,30 @@
           ctx.beginPath();
           ctx.arc(cx - 1, cy, 4.5, Math.PI * 0.2, Math.PI * 1.8);
           ctx.fill();
+        }
+
+        function drawSeal(x, y) {
+          var px = x * TILE;
+          var py = y * TILE;
+          var cx = px + TILE / 2;
+          var cy = py + TILE / 2 + Math.sin(state.pulse + x * 0.4) * 1.2;
+          ctx.fillStyle = "#8cc8ff";
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - 8);
+          ctx.lineTo(cx + 3, cy - 2);
+          ctx.lineTo(cx + 9, cy - 1);
+          ctx.lineTo(cx + 4, cy + 3);
+          ctx.lineTo(cx + 6, cy + 9);
+          ctx.lineTo(cx, cy + 5);
+          ctx.lineTo(cx - 6, cy + 9);
+          ctx.lineTo(cx - 4, cy + 3);
+          ctx.lineTo(cx - 9, cy - 1);
+          ctx.lineTo(cx - 3, cy - 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = "#d7ecff";
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
         }
 
         function drawPlayer() {
@@ -849,6 +1047,29 @@
           for (i = 0; i < 3; i += 1) ctx.fillRect(px + 11, py + 12 + i * 8, TILE - 22, 3);
         }
 
+        function drawBoss() {
+          var boss, px, py, size, blink;
+          if (!state.boss || !state.boss.active) return;
+          boss = state.boss;
+          px = boss.x * TILE;
+          py = boss.y * TILE;
+          size = Math.floor(TILE * 1.55);
+          px = px + TILE / 2 - size / 2;
+          py = py + TILE / 2 - size / 2;
+
+          blink = boss.vulnerableMs > 0 && Math.floor(boss.vulnerableMs / 150) % 2 === 0;
+          ctx.fillStyle = boss.vulnerableMs > 0 ? (blink ? "#ffd166" : "#ffe8a8") : "#fff4ea";
+          ctx.fillRect(px, py, size, size);
+          ctx.strokeStyle = boss.vulnerableMs > 0 ? "#7d5d2f" : "#c55e7c";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(px, py, size, size);
+          ctx.fillStyle = "#c55e7c";
+          ctx.font = "bold 12px Trebuchet MS, sans-serif";
+          ctx.fillText(BOSS_NAME, px + 4, py + 14);
+          ctx.fillStyle = boss.vulnerableMs > 0 ? "#7d5d2f" : "#e0618e";
+          ctx.fillRect(px + 8, py + size - 16, size - 16, 6);
+        }
+
         function drawOverlay() {
           var title, subtitle;
           if (!state.gameOver) return;
@@ -887,7 +1108,14 @@
             drawCroissant(parseInt(parts[0], 10), parseInt(parts[1], 10));
           }
 
+          keys = Object.keys(state.seals);
+          for (i = 0; i < keys.length; i += 1) {
+            parts = keys[i].split(",");
+            drawSeal(parseInt(parts[0], 10), parseInt(parts[1], 10));
+          }
+
           for (i = 0; i < state.enemies.length; i += 1) drawEnemy(state.enemies[i]);
+          drawBoss();
           drawPlayer();
           drawOverlay();
         }
@@ -901,6 +1129,8 @@
             if (state.invulnMs > 0) state.invulnMs -= dt;
             if (state.frightenedMs > 0) state.frightenedMs -= dt;
             updateEnemyRespawns(dt);
+            updateBossTimers(dt);
+            updateSeals(dt);
 
             while (state.playerAccMs >= state.playerMoveMs && !state.gameOver) {
               state.playerAccMs -= state.playerMoveMs;
@@ -910,6 +1140,7 @@
             while (state.enemyAccMs >= state.enemyMoveMs && !state.gameOver) {
               state.enemyAccMs -= state.enemyMoveMs;
               updateEnemies();
+              updateBossStep();
               if (resolveEnemyContact()) loseLifeOrGame();
             }
             updateHud();
