@@ -524,6 +524,28 @@
           fillList(leaderboardHard, hardItems);
         }
 
+        function prependLocalResult(diff, name, score) {
+          var target;
+          var li;
+          var maxItems = 10;
+          if (diff === "easy") target = leaderboardEasy;
+          else if (diff === "hard") target = leaderboardHard;
+          else target = leaderboardMedium;
+
+          if (!target) return;
+          if (target.firstChild && target.firstChild.textContent === "Пока пусто") {
+            target.innerHTML = "";
+          }
+
+          li = document.createElement("li");
+          li.textContent = name + " — " + score;
+          target.insertBefore(li, target.firstChild || null);
+
+          while (target.children.length > maxItems) {
+            target.removeChild(target.lastChild);
+          }
+        }
+
         function fetchLeaderboard() {
           return fetch(API_BASE + "/leaderboard")
             .then(function (res) { return res.json(); })
@@ -549,8 +571,8 @@
             if (!autoMode) setHint("Имя: от 2 до 20 символов", true);
             return Promise.resolve();
           }
-          if (!state || score <= 0) {
-            if (!autoMode) setHint("Сначала набери очки в игре", true);
+          if (!state || score < 0) {
+            if (!autoMode) setHint("Некорректный счёт", true);
             return Promise.resolve();
           }
           if (state.sentScore) return Promise.resolve();
@@ -568,7 +590,9 @@
                 if (!res.ok) throw new Error(txt || ("HTTP " + res.status));
                 state.sentScore = true;
                 setHint("Результат отправлен: " + score, false);
-                return fetchLeaderboard();
+                return fetchLeaderboard().finally(function () {
+                  prependLocalResult(currentDifficulty, safeName, score);
+                });
               });
             })
             .catch(function (err) {
