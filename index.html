@@ -81,6 +81,21 @@
         margin: 0 0 8px;
         font-size: 1.05rem;
       }
+      .tops-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .top-card {
+        border: 1px solid rgba(44, 214, 255, 0.35);
+        border-radius: 10px;
+        padding: 8px;
+        background: rgba(4, 8, 18, 0.35);
+      }
+      .top-card h3 {
+        margin: 0 0 6px;
+        font-size: 0.92rem;
+      }
       .leaderboard ol {
         margin: 0;
         padding-left: 20px;
@@ -152,6 +167,13 @@
         padding: 8px 10px;
         width: 220px;
       }
+      .start-gate select {
+        background: #0d1933;
+        border: 1px solid rgba(44, 214, 255, 0.55);
+        border-radius: 8px;
+        color: #ebf1ff;
+        padding: 8px 10px;
+      }
       button {
         border: 1px solid var(--line);
         background: linear-gradient(120deg, #11234a, #16356f);
@@ -195,6 +217,9 @@
         .stats { text-align: left; }
         .mobile-controls { display: grid; }
         .start-gate, .leaderboard { padding: 10px; }
+        .tops-grid {
+          grid-template-columns: 1fr;
+        }
         canvas {
           width: 100%;
           max-height: 72vh;
@@ -236,13 +261,31 @@
         <h2>Перед стартом введи имя</h2>
         <div class="start-gate-controls">
           <input id="startNameInput" type="text" maxlength="20" placeholder="Имя игрока (2-20)" />
+          <select id="difficultySelect" aria-label="Сложность">
+            <option value="easy">Легкий</option>
+            <option value="medium" selected>Средний</option>
+            <option value="hard">Сложный</option>
+          </select>
           <button id="startGameBtn" class="small-btn" type="button">Начать игру</button>
         </div>
         <p class="hint">Пока имя не введено, игра не запускается.</p>
       </section>
       <section class="leaderboard">
-        <h2>Топ-10: Побег от статуса</h2>
-        <ol id="leaderboardList"></ol>
+        <h2>Топы по сложности</h2>
+        <div class="tops-grid">
+          <div class="top-card">
+            <h3>Легкий</h3>
+            <ol id="leaderboardEasy"></ol>
+          </div>
+          <div class="top-card">
+            <h3>Средний</h3>
+            <ol id="leaderboardMedium"></ol>
+          </div>
+          <div class="top-card">
+            <h3>Сложный</h3>
+            <ol id="leaderboardHard"></ol>
+          </div>
+        </div>
         <p id="leaderboardHint" class="hint">Результат отправляется автоматически при завершении раунда.</p>
       </section>
       <section class="rules">
@@ -252,6 +295,7 @@
           <li>Если статус касается тебя, теряется жизнь.</li>
           <li>Круассан делает статусы уязвимыми на время: они мигают, и их можно съесть.</li>
           <li>На 3 уровне печати-звёздочки ослабляют босса «МойОфис» и тоже включают уязвимость статусов.</li>
+          <li>Выбирай сложность перед стартом: скорость игры меняется, и для каждой сложности свой топ.</li>
           <li>Если включался чит-код, результат раунда не попадает в общий рейтинг.</li>
         </ol>
       </section>
@@ -324,13 +368,18 @@
         var cheatBtn = document.getElementById("cheatBtn");
         var startGate = document.getElementById("startGate");
         var startNameInput = document.getElementById("startNameInput");
+        var difficultySelect = document.getElementById("difficultySelect");
         var startGameBtn = document.getElementById("startGameBtn");
-        var leaderboardList = document.getElementById("leaderboardList");
+        var leaderboardEasy = document.getElementById("leaderboardEasy");
+        var leaderboardMedium = document.getElementById("leaderboardMedium");
+        var leaderboardHard = document.getElementById("leaderboardHard");
         var leaderboardHint = document.getElementById("leaderboardHint");
         var dirButtons = document.querySelectorAll(".dir-btn");
         var API_BASE = "https://d5do84mn631if2vsbgrq.z7jmlavt.apigw.yandexcloud.net";
         var NAME_KEY = "pobeg_player_name";
+        var DIFF_KEY = "pobeg_difficulty";
         var currentPlayerName = "";
+        var currentDifficulty = "medium";
         var gameStarted = false;
         var currentLevelIndex = 0;
         var livesLeft = 3;
@@ -343,6 +392,11 @@
         var cheatUsedThisRun = false;
         var isPaused = false;
         var BOSS_NAME = "МойОфис";
+        var DIFFICULTY_CONFIG = {
+          easy: { label: "Легкий", scorePrefix: "[E]", playerMult: 1.0, enemyMult: 1.25, dashMult: 1.25 },
+          medium: { label: "Средний", scorePrefix: "[M]", playerMult: 1.0, enemyMult: 1.0, dashMult: 1.0 },
+          hard: { label: "Сложный", scorePrefix: "[H]", playerMult: 1.08, enemyMult: 0.82, dashMult: 0.84 }
+        };
 
         var WIDTH = MAP[0].length;
         var HEIGHT = MAP.length;
@@ -393,6 +447,9 @@
         function loadPlayerName() {
           var saved = localStorage.getItem(NAME_KEY) || "";
           if (saved) startNameInput.value = saved;
+          currentDifficulty = localStorage.getItem(DIFF_KEY) || "medium";
+          if (!DIFFICULTY_CONFIG[currentDifficulty]) currentDifficulty = "medium";
+          difficultySelect.value = currentDifficulty;
         }
 
         function startGameSession() {
@@ -402,10 +459,13 @@
             return;
           }
           currentPlayerName = name;
+          currentDifficulty = difficultySelect.value || "medium";
+          if (!DIFFICULTY_CONFIG[currentDifficulty]) currentDifficulty = "medium";
+          localStorage.setItem(DIFF_KEY, currentDifficulty);
           savePlayerName(name);
           gameStarted = true;
           startGate.style.display = "none";
-          setHint("Игрок: " + name, false);
+          setHint("Игрок: " + name + " | Сложность: " + DIFFICULTY_CONFIG[currentDifficulty].label, false);
           startNewGame();
         }
 
@@ -420,20 +480,47 @@
           ctx.fillText("Результат отправляется автоматически после раунда", 130, canvas.height / 2 + 28);
         }
 
+        function parseDifficultyName(rawName) {
+          var name = String(rawName || "");
+          if (name.indexOf("[E]") === 0) return { diff: "easy", name: name.substring(3).trim() };
+          if (name.indexOf("[M]") === 0) return { diff: "medium", name: name.substring(3).trim() };
+          if (name.indexOf("[H]") === 0) return { diff: "hard", name: name.substring(3).trim() };
+          return { diff: "medium", name: name };
+        }
+
         function renderLeaderboard(items) {
           var i, li;
-          leaderboardList.innerHTML = "";
-          if (!items || !items.length) {
-            li = document.createElement("li");
-            li.textContent = "Пока пусто";
-            leaderboardList.appendChild(li);
-            return;
+          var easyItems = [];
+          var mediumItems = [];
+          var hardItems = [];
+
+          function fillList(target, listItems) {
+            var j, node;
+            target.innerHTML = "";
+            if (!listItems.length) {
+              node = document.createElement("li");
+              node.textContent = "Пока пусто";
+              target.appendChild(node);
+              return;
+            }
+            for (j = 0; j < Math.min(10, listItems.length); j += 1) {
+              node = document.createElement("li");
+              node.textContent = listItems[j].name + " — " + listItems[j].score;
+              target.appendChild(node);
+            }
           }
+
           for (i = 0; i < items.length; i += 1) {
-            li = document.createElement("li");
-            li.textContent = items[i].name + " — " + items[i].score;
-            leaderboardList.appendChild(li);
+            var parsed = parseDifficultyName(items[i].name);
+            var item = { name: parsed.name, score: items[i].score };
+            if (parsed.diff === "easy") easyItems.push(item);
+            else if (parsed.diff === "hard") hardItems.push(item);
+            else mediumItems.push(item);
           }
+
+          fillList(leaderboardEasy, easyItems);
+          fillList(leaderboardMedium, mediumItems);
+          fillList(leaderboardHard, hardItems);
         }
 
         function fetchLeaderboard() {
@@ -463,11 +550,12 @@
             return Promise.resolve();
           }
           if (state.sentScore) return Promise.resolve();
+          var scoreName = DIFFICULTY_CONFIG[currentDifficulty].scorePrefix + " " + name;
 
           return fetch(API_BASE + "/score", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: name, score: score })
+            body: JSON.stringify({ name: scoreName, score: score })
           })
             .then(function (res) {
               return res.text().then(function (txt) {
@@ -570,12 +658,16 @@
         }
 
         function loadLevel(levelIndex) {
+          var diffCfg = DIFFICULTY_CONFIG[currentDifficulty] || DIFFICULTY_CONFIG.medium;
           currentLevelIndex = levelIndex;
           MAP = LEVELS[levelIndex];
           buildStateFromMap();
           state.levelCompleteMessageTimer = 1200;
-          state.enemyMoveMs = Math.max(110, 190 - currentLevelIndex * 25);
-          state.playerMoveMs = Math.max(90, 125 - currentLevelIndex * 10);
+          state.enemyMoveMs = Math.max(90, (190 - currentLevelIndex * 25) * diffCfg.enemyMult);
+          state.playerMoveMs = Math.max(80, (125 - currentLevelIndex * 10) * diffCfg.playerMult);
+          if (state.boss && state.boss.active) {
+            state.boss.dashCdMs = Math.max(1300, state.boss.dashCdMs * diffCfg.dashMult);
+          }
           updateHud();
         }
 
@@ -916,9 +1008,9 @@
           for (i = 0; i < 3; i += 1) hearts += i < livesLeft ? "❤️" : "🖤";
           if (state && state.boss && state.boss.active) {
             for (i = 0; i < state.boss.hp; i += 1) bossHp += "🟥";
-            coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | " + BOSS_NAME + " HP: " + bossHp + " | Печати: " + Object.keys(state.seals).length + " | Очки: " + getCurrentScore();
+            coffeeLeftEl.textContent = "Сложность: " + DIFFICULTY_CONFIG[currentDifficulty].label + " | Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | " + BOSS_NAME + " HP: " + bossHp + " | Печати: " + Object.keys(state.seals).length + " | Очки: " + getCurrentScore();
           } else {
-            coffeeLeftEl.textContent = "Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | Стаканчиков: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
+            coffeeLeftEl.textContent = "Сложность: " + DIFFICULTY_CONFIG[currentDifficulty].label + " | Ур: " + (currentLevelIndex + 1) + " | Жизни: " + hearts + " | Стаканчиков: " + (state ? cupsLeft() : 0) + " | Очки: " + getCurrentScore();
           }
           if (!state || !state.gameOver) {
             statusTextEl.textContent = "Статус: В игре";
