@@ -88,6 +88,24 @@
       .leaderboard li {
         margin: 3px 0;
       }
+      .rules {
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid rgba(44, 214, 255, 0.35);
+        border-radius: 12px;
+        background: rgba(7, 13, 27, 0.35);
+      }
+      .rules h2 {
+        margin: 0 0 8px;
+        font-size: 1rem;
+      }
+      .rules ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .rules li {
+        margin: 4px 0;
+      }
       .leaderboard-controls {
         display: flex;
         gap: 8px;
@@ -226,6 +244,16 @@
         <h2>Топ-10: Побег от статуса</h2>
         <ol id="leaderboardList"></ol>
         <p id="leaderboardHint" class="hint">Результат отправляется автоматически при завершении раунда.</p>
+      </section>
+      <section class="rules">
+        <h2>Правила игры</h2>
+        <ol>
+          <li>Собирай стаканчики кофе, чтобы проходить уровни.</li>
+          <li>Если статус касается тебя, теряется жизнь.</li>
+          <li>Круассан делает статусы уязвимыми на время: они мигают, и их можно съесть.</li>
+          <li>На 3 уровне печати-звёздочки ослабляют босса «МойОфис» и тоже включают уязвимость статусов.</li>
+          <li>Если включался чит-код, результат раунда не попадает в общий рейтинг.</li>
+        </ol>
       </section>
     </main>
 
@@ -627,12 +655,13 @@
           if (state.seals[key]) {
             delete state.seals[key];
             totalScore += 10;
+            state.frightenedMs = Math.max(state.frightenedMs, 5000);
             if (state.boss && state.boss.active) {
               state.boss.vulnerableMs = 5000;
               if (Object.keys(state.seals).length === 0 && state.boss.hp > 1) {
                 state.sealRespawnMs = 9000;
               }
-              setHint("Печать активирована: " + BOSS_NAME + " уязвим", false);
+              setHint("Звёздочка активирована: " + BOSS_NAME + " уязвим, статусы мигают", false);
             }
           }
         }
