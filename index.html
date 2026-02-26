@@ -260,7 +260,7 @@
       <section id="startGate" class="start-gate">
         <h2>Перед стартом введи имя</h2>
         <div class="start-gate-controls">
-          <input id="startNameInput" type="text" maxlength="20" placeholder="Имя игрока (2-20)" />
+          <input id="startNameInput" type="text" maxlength="16" placeholder="Имя игрока (2-16)" />
           <select id="difficultySelect" aria-label="Сложность">
             <option value="easy">Легкий</option>
             <option value="medium" selected>Средний</option>
@@ -538,6 +538,9 @@
         function submitScore(autoMode) {
           var name = currentPlayerName;
           var score = getCurrentScore();
+          var diffPrefix = DIFFICULTY_CONFIG[currentDifficulty].scorePrefix + " ";
+          var maxRawNameLen = Math.max(2, 20 - diffPrefix.length);
+          var safeName;
           if (cheatUsedThisRun) {
             setHint("В этом раунде использовался чит: результат не отправляется", true);
             return Promise.resolve();
@@ -551,7 +554,9 @@
             return Promise.resolve();
           }
           if (state.sentScore) return Promise.resolve();
-          var scoreName = DIFFICULTY_CONFIG[currentDifficulty].scorePrefix + " " + name;
+          safeName = name.slice(0, maxRawNameLen).trim();
+          if (safeName.length < 2) safeName = "Игрок";
+          var scoreName = diffPrefix + safeName;
 
           return fetch(API_BASE + "/score", {
             method: "POST",
