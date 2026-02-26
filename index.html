@@ -393,9 +393,10 @@
         var isPaused = false;
         var BOSS_NAME = "МойОфис";
         var DIFFICULTY_CONFIG = {
-          easy: { label: "Легкий", scorePrefix: "[E]", playerMult: 1.0, enemyMult: 1.25, dashMult: 1.25 },
+          // Lower move ms = faster movement step.
+          easy: { label: "Легкий", scorePrefix: "[E]", playerMult: 1.35, enemyMult: 1.35, dashMult: 1.35 },
           medium: { label: "Средний", scorePrefix: "[M]", playerMult: 1.0, enemyMult: 1.0, dashMult: 1.0 },
-          hard: { label: "Сложный", scorePrefix: "[H]", playerMult: 1.08, enemyMult: 0.82, dashMult: 0.84 }
+          hard: { label: "Сложный", scorePrefix: "[H]", playerMult: 0.78, enemyMult: 0.78, dashMult: 0.75 }
         };
 
         var WIDTH = MAP[0].length;
@@ -659,12 +660,16 @@
 
         function loadLevel(levelIndex) {
           var diffCfg = DIFFICULTY_CONFIG[currentDifficulty] || DIFFICULTY_CONFIG.medium;
+          var baseEnemy;
+          var basePlayer;
           currentLevelIndex = levelIndex;
           MAP = LEVELS[levelIndex];
           buildStateFromMap();
           state.levelCompleteMessageTimer = 1200;
-          state.enemyMoveMs = Math.max(90, (190 - currentLevelIndex * 25) * diffCfg.enemyMult);
-          state.playerMoveMs = Math.max(80, (125 - currentLevelIndex * 10) * diffCfg.playerMult);
+          baseEnemy = 190 - currentLevelIndex * 25;
+          basePlayer = 125 - currentLevelIndex * 10;
+          state.enemyMoveMs = Math.max(70, baseEnemy * diffCfg.enemyMult);
+          state.playerMoveMs = Math.max(70, basePlayer * diffCfg.playerMult);
           if (state.boss && state.boss.active) {
             state.boss.dashCdMs = Math.max(1300, state.boss.dashCdMs * diffCfg.dashMult);
           }
